@@ -4,6 +4,7 @@
 //////////////////////////////////////////////////////////////////////////
 
 load("cs10-txt-lib-0.4.js");
+
 // Don't edit the line above, or you won't be able to get user input!
 
 // Also, do not use the following variable names in your own code below:
@@ -137,6 +138,118 @@ function ToChar(s) {
     return s.charCodeAt(0);
 }
 
+// From jQuery source code.
+var IsFunction = function isFunction( obj ) {
+    // Support: Chrome <=57, Firefox <=52
+    // In some browsers, typeof returns "function" for HTML <object> elements
+    // (i.e., `typeof document.createElement( "object" ) === "function"`).
+    // We don't want to classify *any* DOM node as a function.
+    return typeof obj === "function" && typeof obj.nodeType !== "number";
+};
+
+// From jQuery source code.
+let IsPlainObject = function( obj ) {
+    var proto, Ctor;
+
+    // Detect obvious negatives
+    // Use toString instead of jQuery.type to catch host objects
+    if ( !obj || toString.call( obj ) !== "[object Object]" ) {
+        return false;
+    }
+
+    proto = Object.getPrototypeOf( obj );
+
+    // Objects with no prototype (e.g., `Object.create( null )`) are plain
+    if ( !proto ) {
+        return true;
+    }
+
+    let class2type = {};
+    let hasOwn = class2type.hasOwnProperty;
+    let fnToString = hasOwn.toString;
+    let ObjectFunctionString = fnToString.call( Object );
+    // Objects with prototype are plain iff they were constructed by a global Object function
+    Ctor = hasOwn.call( proto, "constructor" ) && proto.constructor;
+    return typeof Ctor === "function" && fnToString.call( Ctor ) === ObjectFunctionString;
+};
+
+// From jQuery source code.
+let Extend;
+Extend = function() {
+	var options, name, src, copy, copyIsArray, clone,
+		target = arguments[ 0 ] || {},
+		i = 1,
+		length = arguments.length,
+		deep = false;
+
+	// Handle a deep copy situation
+	if ( typeof target === "boolean" ) {
+		deep = target;
+
+		// Skip the boolean and the target
+		target = arguments[ i ] || {};
+		i++;
+	}
+
+	// Handle case when target is a string or something (possible in deep copy)
+	if ( typeof target !== "object" && !IsFunction( target ) ) {
+		target = {};
+	}
+
+	// Extend jQuery itself if only one argument is passed
+	if ( i === length ) {
+		target = this;
+		i--;
+	}
+
+	for ( ; i < length; i++ ) {
+
+		// Only deal with non-null/undefined values
+		if ( ( options = arguments[ i ] ) != null ) {
+
+			// Extend the base object
+			for ( name in options ) {
+				src = target[ name ];
+				copy = options[ name ];
+
+				// Prevent never-ending loop
+				if ( target === copy ) {
+					continue;
+				}
+
+				// Recurse if we're merging plain objects or arrays
+				if ( deep && copy && ( IsPlainObject( copy ) ||
+					( copyIsArray = Array.isArray( copy ) ) ) ) {
+
+					if ( copyIsArray ) {
+						copyIsArray = false;
+						clone = src && Array.isArray( src ) ? src : [];
+
+					} else {
+						clone = src && IsPlainObject( src ) ? src : {};
+					}
+
+					// Never move original objects, clone them
+					target[ name ] = Extend( deep, clone, copy );
+
+				// Don't bring in undefined values
+				} else if ( copy !== undefined ) {
+					target[ name ] = copy;
+				}
+			}
+		}
+	}
+
+	// Return the modified object
+	return target;
+};
+
+function assert(condition, message) {
+    if (!condition) {
+        throw message || "Assertion failed";
+    }
+}
+
 /*
  * Constants
  */
@@ -150,7 +263,9 @@ let constants = Object.freeze({
     "WEST_DIR": 7,
     "NORTHWEST_DIR": 8,
 
-    "WARNING_BAD_MSG": 1,
+    "CHARACTER_CREATURE": 1,
+
+    "EMPTY_TILE": 1,
 
     "MAX_HP": 200,
     "MAX_SP": 200,
@@ -159,7 +274,7 @@ let constants = Object.freeze({
 });
 
 /*
- * Global gamestate variables (yes, I know globals aren't the best)
+ * Global gamestate variables
  */
 let hp = constants.MAX_HP;
 let st = constants.MAX_SP;
@@ -172,44 +287,91 @@ let screen;
 let term;
 let log = [];
 
-function AddLogEntry(sgrs, fg, bg, txt) {
-    log[log.length] = {
-        "sgrs": sgrs,
-        "fg": fg,
-        "bg": bg,
-        "txt": txt,
+let time = 0;
+
+let curLevel = 0;
+let mapLevels = [];
+let mapDrawLevels;
+
+function NewLogFactory() {
+    let ret = {
+        "sgrs": [],
+        "fgs": [],
+        "bgs": [],
+        "txt": ""
     };
-};
 
-AddLogEntry(
-    [
-        {
-            "char": 0,
-            "to": true,
-            "sgr": SGR.BOLD
-        },
-        {
-            "char": "Welcome to".length,
-            "to": true,
-            "sgr": SGR.UNDERLINE
-        },
-        {
-            "char": "Welcome to".length + constants.GAME_NAME.length,
-            "to": false,
-            "sgr": SGR.UNDERLINE
-        }
-    ],
-    [
-        {
-            "char": 0,
-            "color": TextColor.ANSI.GREEN
-        }
-    ],
-    [],
-    "Welcome to " + constants.GAME_NAME + "!"
-);
+    ret.SetSGR = function(sgr, pos, state) {
+        let i;
+        for (i = 0; i < ret.sgrs.length && ret.sgrs[i].pos != pos; ++i) {}
 
-stderr.printf("%s\n", "" + log.toSource());
+        if (i == ret.sgrs.length) {
+            ret.sgrs[i] = {};
+            ret.sgrs[i].pos = pos;
+            ret.sgrs[i].sgrs = {};
+        }
+        ret.sgrs[i].sgrs[sgr] = state;
+    };
+
+    ret.SetFg = function(fg, pos) {
+        let i;
+        for (i = 0; i < ret.fgs.length && ret.fgs[i].pos != pos; ++i) {}
+
+        ret.fgs[i] = {};
+        ret.fgs[i].pos = pos;
+        ret.fgs[i].fg = fg;
+    };
+
+    ret.SetBg = function(bg, pos) {
+        let i;
+        for (i = 0; i < ret.bgs.length && ret.bgs[i].pos != pos; ++i) {}
+
+        ret.bgs[i] = {};
+        ret.bgs[i].pos = pos;
+        ret.bgs[i].bg = bg;
+    };
+
+    ret.SetTxt = function(txt) {
+        ret.txt = txt;
+    };
+    
+    ret.EnableSGRS = function(sgrs, pos) {
+        for (let i = 0; i < sgrs.length; ++i) {
+            ret.SetSGR(sgrs[i], pos, true);
+        }
+    };
+
+    ret.DisableSGRS = function(sgrs, pos) {
+        for (let i = 0; i < sgrs.length; ++i) {
+            ret.SetSGR(sgrs[i], pos, false);
+        }
+    };
+
+    ret.CommitToLog = function() {
+        ret.sgrs.sort(function(a, b) { return a.pos - b.pos; });
+        ret.fgs.sort(function(a, b) { return a.pos - b.pos; });
+        ret.bgs.sort(function(a, b) { return a.pos - b.pos; });
+
+        let next = {
+            "sgrs": ret.sgrs,
+            "fgs": ret.fgs,
+            "bgs": ret.bgs,
+            "txt": ret.txt,
+        };
+
+        log[log.length] = Extend(true, {}, next);
+    };
+    
+    return ret;
+}
+
+let lf = NewLogFactory();
+lf.EnableSGRS([SGR.BOLD], 0);
+lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
+lf.DisableSGRS([SGR.UNDERLINE], "Welcome to".length + constants.GAME_NAME.length + 1);
+lf.SetFg(TextColor.ANSI.GREEN, 0);
+lf.SetTxt("Welcome to " + constants.GAME_NAME + "!");
+lf.CommitToLog();
 
 try {
     /*
@@ -229,6 +391,24 @@ try {
      * Main Game Functions
      */
 
+    function SetupFirstLevel() {
+        mapLevels[curLevel] = {
+            "creatures": [
+                {"type": constants.CHARACTER_CREATURE, "x": 0, "y": 0}
+            ],
+            "items": [],
+            "tiles": [
+                {"type": constants.EMPTY_TILE}
+            ],
+            "dims": {
+                "x": 1,
+                "y": 1,
+            }
+        };
+
+        mapDrawLevels = [0];
+    }
+
     function DrawBar(name, val, max, x, y, len) {
         let tg = screen.newTextGraphics();
 
@@ -236,23 +416,20 @@ try {
 
         let remLen = len - name.length - 1;
         let barLen = remLen * val / max;
-        barLen = barLen == 0 ? 1 : barLen;
+        barLen = barLen < 0 ? 0 : barLen;
         let percStat = val / max;
 
         if (percStat <= 0) {
             return;
         } else if (percStat < 0.10) {
             tg.setForegroundColor(TextColor.ANSI.RED);
-            tg.enableModifiers(SGR.BLINK);
-            tg.enableModifiers(SGR.BOLD);
-            tg.enableModifiers(SGR.REVERSE);
+            tg.enableModifiers([SGR.BLINK, SGR.BOLD, SGR.REVERSE]);
         } else if (percStat < 0.20) {
             tg.setForegroundColor(TextColor.ANSI.RED);
-            tg.enableModifiers(SGR.BLINK);
-            tg.enableModifiers(SGR.BOLD);
+            tg.enableModifiers([SGR.BLINK, SGR.BOLD]);
         } else if (percStat < 0.30) {
             tg.setForegroundColor(TextColor.ANSI.RED);
-            tg.enableModifiers(SGR.BLINK);
+            tg.enableModifiers([SGR.BLINK]);
         } else if (percStat < 0.40) {
             tg.setForegroundColor(TextColor.ANSI.RED);
         } else if (percStat < 0.80) {
@@ -318,7 +495,7 @@ try {
         let tg = screen.newTextGraphics();
 
         let logLines = termSize.getRows() - 13;
-        let lineLen = (termSize.getColumns() - 1) / 3;
+        let lineLen = Math.floor((termSize.getColumns() - 1) / 3);
 
         tg.fillRectangle(
             new TerminalPosition(termSize.getColumns() * 2 / 3, 12),
@@ -332,7 +509,7 @@ try {
             linesSoFar += Math.ceil(log[i].txt.length / lineLen);
         }
 
-        let partials = Math.max(0, linesSoFar - logLines);
+        let partials = Math.max(0, linesSoFar - logLines) * lineLen;
         let first = true;
         ++i;
 
@@ -341,14 +518,154 @@ try {
             let tg = screen.newTextGraphics();
             // TODO: SGR & Colours
             let wrapedLines = Math.ceil(log[i].txt.length / lineLen);
-            for (let l = first ? partials : 0; l < wrapedLines; ++l) {
-                tg.putString(
-                    new TerminalPosition(termSize.getColumns() * 2 / 3, 12 + linesSoFar),
-                    log[i].txt.slice(lineLen * l, lineLen * (l + 1))
+            let charsSoFar = 0;
+
+            let j = 0;
+            let k = 0;
+            let l = 0;
+            for (let m = first ? partials : 0; m < log[i].txt.length; ++m, ++charsSoFar) {
+                if (charsSoFar == lineLen) {
+                    charsSoFar = 0;
+                    ++linesSoFar;
+                }
+
+                for (; j < log[i].sgrs.length && log[i].sgrs[j].pos < m; ++j) {}
+                for (; k < log[i].fgs.length  && log[i].fgs[k].pos < m; ++k) {}
+                for (; l < log[i].bgs.length  && log[i].bgs[l].pos < m; ++l) {}
+
+                if (j < log[i].sgrs.length && log[i].sgrs[j].pos == m) {
+                    for (let key in log[i].sgrs[j].sgrs) {
+                        if (
+                            log[i].sgrs[j].sgrs.hasOwnProperty(key) 
+                            && log[i].sgrs[j].sgrs[key]
+                        ) {
+                            tg.enableModifiers([SGR.valueOf(key)]);
+                        } else {
+                            tg.disableModifiers([SGR.valueOf(key)]);
+                        }
+                    }
+                }
+                if (k < log[i].fgs.length && log[i].fgs[k].pos == m) {
+                    tg.setForegroundColor(log[i].fgs[k].fg);
+                }
+                if (l < log[i].bgs.length && log[i].bgs[l].pos == m) {
+                    tg.SetBacgroundColor(log[i].bgs[l].bg);
+                }
+
+                tg.setCharacter(
+                    new TerminalPosition(
+                        termSize.getColumns() * 2 / 3 + charsSoFar, 
+                        12 + linesSoFar
+                    ), 
+                    log[i].txt[m]
                 );
-                ++linesSoFar;
             }
+            ++linesSoFar;
             first = false;
+        }
+    }
+
+    function FindPlayerLocation(map) {
+        let pLoc;
+        for (pLoc = 0; pLoc < map.creatures.length && map.creatures[pLoc].type != constants.CHARACTER_CREATURE; ++pLoc) {}
+        return pLoc;
+    }
+
+    function FindCreaturesOnTile(map, x, y) {
+        let ret = [];
+        for (let i = 0; i < map.creatures.length; ++i) {
+            if (map.creatures[i].x == x && map.creatures[i].y == y) {
+                ret[ret.length] = map.creatures[i];
+            }
+        }
+        return ret;
+    }
+
+    function FindItemsOnTile(map, x, y) {
+        let ret = [];
+        for (let i = 0; i < map.items.length; ++i) {
+            if (map.items[i].x == x && map.items[i].y == y) {
+                ret[ret.length] = map.items[i];
+            }
+        }
+        return ret;
+    }
+
+    function DrawCreature(map, xO, yO, c) {
+        let tg = screen.newTextGraphics();
+        if (c.type == constants.CHARACTER_CREATURE) {
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                Symbols.FACE_WHITE
+            );
+        }
+    }
+
+    function DrawTile(map, xO, yO, t) {
+        let tg = screen.newTextGraphics();
+    }
+
+    function DrawTile(map, xO, yO, x, y) {
+        let tg = screen.newTextGraphics();
+        let t = x + y * map.dims.x;
+        if (map.tiles[t].type == constants.EMPTY_TILE) {
+        }
+    }
+
+    function UpdateGameView() {
+        let tg = screen.newTextGraphics();
+        let length = termSize.getColumns() * 2 / 3 - 2;
+        let width = termSize.getRows() - 2;
+        tg.fillRectangle(
+            new TerminalPosition(1, 1),
+            new TerminalSize(length, width),
+            ' '
+        );
+
+        let map = mapLevels[curLevel];
+
+        let pLoc = FindPlayerLocation(map);
+        assert(pLoc != map.creatures.length, "Character not found on level.");
+
+        let startX = Math.floor(map.creatures[pLoc].x - length / 2);
+        let startY = Math.floor(map.creatures[pLoc].y - width / 2);
+
+        for (let yO = 0; yO < width; ++yO) {
+            for (let xO = 0; xO < length; ++xO) {
+                let x = startX + xO;
+                let y = startY + yO;
+
+                if (
+                    x >= 0
+                    && x < map.dims.x
+                    && y >= 0
+                    && y < map.dims.y
+                ) {
+                    // Draw Order:
+                    // 1. Creatures
+                    // 2. Items
+                    // 3. Tiles
+                    let cs = FindCreaturesOnTile(map, x, y);
+                    let is = FindItemsOnTile(map, x, y);
+
+                    let t = x + y * map.dims.x;
+
+                    if (mapDrawLevels[t] < cs.length) {
+                        DrawCreature(map, xO, yO, cs[mapDrawLevels[t]]);
+                    } else if (mapDrawLevels[t] < (cs.length + is.length)) {
+                        DrawItem(map, xO, yO, is[mapDrawLevels[t] - cs.length]);
+                    } else {
+                        DrawTile(map, xO, yO, x, y);
+                    }
+
+                    ++mapDrawLevels[t];
+
+                    if (mapDrawLevels[t] > (cs.length + is.length - 1)) {
+                        mapDrawLevels[t] = 0;
+                    }
+
+                }
+            }
         }
     }
 
@@ -357,8 +674,7 @@ try {
 
         if (gameover) {
             tg.setForegroundColor(TextColor.ANSI.RED);
-            tg.enableModifiers(SGR.BOLD);
-            tg.enableModifiers(SGR.REVERSE);
+            tg.enableModifiers([SGR.BOLD, SGR.REVERSE]);
         }
 
         // Top and bottom
@@ -460,6 +776,7 @@ try {
         );
 
         UpdateLog();
+        UpdateGameView();
     }
 
     function GameLogic() {
@@ -473,13 +790,23 @@ try {
             return;
         }
 
-        //hp -= 10;
+        hp -= 5;
         dir = NextDir(dir, true);
 
         if (hp <= 0) {
+            let lf = NewLogFactory();
+            lf.EnableSGRS([SGR.BOLD, SGR.REVERSE, SGR.BLINK], 0);
+            lf.SetFg(TextColor.ANSI.RED, 0);
+            lf.SetTxt("You have succumb to weakness.");
+            lf.CommitToLog();
+            lf.SetTxt("Hit enter to exit.");
+            lf.CommitToLog();
+
             gameover = true;
         }
     }
+
+    SetupFirstLevel();
 
     /*
      * Main Game Loop.
@@ -492,13 +819,28 @@ try {
             screen.refresh(Screen.RefreshType.COMPLETE);
         }
 
-        screen.clear();
-        DrawGame();
-        screen.refresh(Screen.RefreshType.DELTA);
-        Thread.yield();
+        let nTime = java.lang.System.currentTimeMillis();
+        let dTime = nTime - time;
 
-        thisInput = term.readInput();
-        GameLogic();
+        if (dTime > 1000) {
+            screen.clear();
+            DrawGame();
+            screen.refresh(Screen.RefreshType.DELTA);
+            time = java.lang.System.currentTimeMillis();
+            Thread.yield();
+        }
+
+        thisInput = term.pollInput();
+        if (thisInput != null) {
+            GameLogic();
+
+            for (let i = 0; i < mapDrawLevels.length; ++i) {
+                mapDrawLevels[i] = 0;
+            }
+            time = 0;
+        } else {
+            Thread.yield();
+        }
     }
 
     /*
@@ -520,31 +862,3 @@ try {
     stdout.printf("\nFATAL ERROR: %s\n", err.toString());
     stdout.flush();
 }
-
-/*
-                         2/3x                                   1/3x
-|---------------------------------------------------|--------------------------|
-|                                                   | ||||||||||||||||||||| HP |
-|                                                   |                          |
-|                                                   | ||||||||||||||||||||| SP |
-|                                                   |           _   _          |
-|                                                   |          |  ^  |         |
-|                                                   |            \|/           | 10 chars
-|                                                   |          <--O-->         |
-|                                                   |            /|\           |
-|                                                   |          |_ v _|         |
-|                                                   |                          |
-|                                                   |--------------------------|
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          | y - 10 chars.
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|                                                   |                          |
-|---------------------------------------------------|--------------------------|
-*/
