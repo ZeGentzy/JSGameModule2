@@ -265,10 +265,19 @@ let constants = Object.freeze({
 
     "CHARACTER_CREATURE": 1,
 
-    "EMPTY_TILE": 1,
+    "FLOOR_TILE": 1,
+    "DOOR_TILE": 2,
+    "SECRET_DOOR_TILE": 3,
+    "WALL_TILE": 4,
+    "CHEST_TILE": 5,
+    "DIRT_TILE": 6,
 
     "MAX_HP": 200,
     "MAX_SP": 200,
+
+
+    "LEVEL_X_DIM": 30,
+    "LEVEL_Y_DIM": 30,
 
     "GAME_NAME": "Gentz' Game",
 });
@@ -331,10 +340,11 @@ function NewLogFactory() {
         ret.bgs[i].bg = bg;
     };
 
+
     ret.SetTxt = function(txt) {
         ret.txt = txt;
     };
-    
+
     ret.EnableSGRS = function(sgrs, pos) {
         for (let i = 0; i < sgrs.length; ++i) {
             ret.SetSGR(sgrs[i], pos, true);
@@ -361,7 +371,50 @@ function NewLogFactory() {
 
         log[log.length] = Extend(true, {}, next);
     };
-    
+
+    return ret;
+}
+
+function NewDirtTile() {
+    let ret = {};
+    ret.type = constants.DIRT_TILE;
+    ret.flash_visible = false;
+    return ret;
+}
+
+function NewWallTile() {
+    let ret = {};
+    ret.type = constants.WALL_TILE;
+    ret.flash_visible = true;
+    return ret;
+}
+
+function NewFloorTile() {
+    let ret = {};
+    ret.type = constants.FLOOR_TILE;
+    ret.flash_visible = false;
+
+    switch (random.nextInt(6)) {
+        case 0:
+            ret.rchar = ".";
+            break;
+        case 1:
+            ret.rchar = ",";
+            break;
+        case 2:
+            ret.rchar = "\"";
+            break;
+        case 3:
+            ret.rchar = "'";
+            break;
+        case 4:
+            ret.rchar = ":";
+            break;
+        case 5:
+            ret.rchar = ";";
+            break;
+    }
+
     return ret;
 }
 
@@ -391,22 +444,87 @@ try {
      * Main Game Functions
      */
 
+    function CarveRoom(tiles, x, x1, y1, x2, y2) {
+        //let to_wall = random.nextInt(2) == 0;
+        let to_wall = true;
+        for (let cy = y1 - 1; cy <= (y2 + 1); ++cy) {
+            for (let cx = x1 - 1; cx <= (x2 + 1); ++cx) {
+                let t = cx + cy * x;
+                if (cy >= y1 && cy <= y2 && cx >= x1 && cx <= x2) {
+                    tiles[t] = NewFloorTile();
+                    continue;
+                }
+                if (to_wall && tiles[t].type == constants.DIRT_TILE) {
+                    tiles[t] = NewWallTile();
+                }
+            }
+        }
+    }
+
+    function CanCarveRoom(tiles, x, x1, y1, x2, y2) {
+        for (let cy = y1 - 1; cy < y2 + 1; ++cy) {
+            for (let cx = x1 - 1; cx < x2 + 1; ++cx) {
+                let t = cx + cy * x;
+                switch (tiles[t].type) {
+                    case constants.DIRT_TILE:
+                        break;
+                    case constants.DOOR_TILE:
+                    case constants.SECRET_DOOR_TILE:
+                    case constants.WALL_TILE:
+                        if (cy >= y1 && cy <= y2 && cx >= x1 && cx <= x2) {
+                            return false;
+                        }
+                        break;
+                    default:
+                        return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    function MakeTileGrid(x, y) {
+        let tiles = [];
+        for (let cy = 0; cy < y; ++cy) {
+            for (let cx = 0; cx < x; ++cx) {
+                let t = cx + cy * x;
+                tiles[t] = NewDirtTile();
+            }
+        }
+
+        let dimX = random.nextInt(3) + 5;
+        let dimY = random.nextInt(3) + 5;
+        CarveRoom(
+            tiles,
+            x,
+            Math.floor(x / 2) - Math.floor(dimX / 2),
+            Math.floor(y / 2) - Math.floor(dimY / 2),
+            Math.floor(x / 2) + Math.ceil(dimX / 2),
+            Math.floor(y / 2) + Math.ceil(dimY / 2)
+        );
+
+        return tiles;
+    }
+
     function SetupFirstLevel() {
+        let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
         mapLevels[curLevel] = {
             "creatures": [
-                {"type": constants.CHARACTER_CREATURE, "x": 0, "y": 0}
+                {"type": constants.CHARACTER_CREATURE, "x": 11, "y": 11}
             ],
             "items": [],
-            "tiles": [
-                {"type": constants.EMPTY_TILE}
-            ],
+            "tiles": tiles,
             "dims": {
-                "x": 1,
-                "y": 1,
+                "x": constants.LEVEL_X_DIM,
+                "y": constants.LEVEL_Y_DIM,
             }
         };
 
-        mapDrawLevels = [0];
+        mapDrawLevels = [];
+        for (let i = 0; i < mapLevels[curLevel].tiles.length; ++i) {
+            mapDrawLevels[i] = 0;
+        }
     }
 
     function DrawBar(name, val, max, x, y, len) {
@@ -516,7 +634,6 @@ try {
         linesSoFar = 0;
         for (; i < log.length; ++i) {
             let tg = screen.newTextGraphics();
-            // TODO: SGR & Colours
             let wrapedLines = Math.ceil(log[i].txt.length / lineLen);
             let charsSoFar = 0;
 
@@ -536,7 +653,7 @@ try {
                 if (j < log[i].sgrs.length && log[i].sgrs[j].pos == m) {
                     for (let key in log[i].sgrs[j].sgrs) {
                         if (
-                            log[i].sgrs[j].sgrs.hasOwnProperty(key) 
+                            log[i].sgrs[j].sgrs.hasOwnProperty(key)
                             && log[i].sgrs[j].sgrs[key]
                         ) {
                             tg.enableModifiers([SGR.valueOf(key)]);
@@ -554,9 +671,9 @@ try {
 
                 tg.setCharacter(
                     new TerminalPosition(
-                        termSize.getColumns() * 2 / 3 + charsSoFar, 
+                        termSize.getColumns() * 2 / 3 + charsSoFar,
                         12 + linesSoFar
-                    ), 
+                    ),
                     log[i].txt[m]
                 );
             }
@@ -601,14 +718,30 @@ try {
         }
     }
 
-    function DrawTile(map, xO, yO, t) {
+    function DrawItem(map, xO, yO, t) {
         let tg = screen.newTextGraphics();
     }
 
     function DrawTile(map, xO, yO, x, y) {
         let tg = screen.newTextGraphics();
         let t = x + y * map.dims.x;
-        if (map.tiles[t].type == constants.EMPTY_TILE) {
+        switch (map.tiles[t].type) {
+            case constants.EMPTY_TILE:
+                break;
+            case constants.WALL_TILE:
+                // TODO Connect walls
+                tg.setCharacter(
+                    new TerminalPosition(1 + xO, 1 + yO),
+                    'W'
+                );
+                break;
+            case constants.FLOOR_TILE:
+                tg.setForegroundColor(TextColor.Indexed.fromRGB(80, 80, 80));
+                tg.setCharacter(
+                    new TerminalPosition(1 + xO, 1 + yO),
+                    map.tiles[t].rchar
+                );
+                break;
         }
     }
 
@@ -660,10 +793,13 @@ try {
 
                     ++mapDrawLevels[t];
 
-                    if (mapDrawLevels[t] > (cs.length + is.length - 1)) {
+                    let flash_max =
+                        cs.length
+                        + is.length
+                        - (map.tiles[t].flash_visible ? 0 : 1);
+                    if (mapDrawLevels[t] > Math.max(flash_max, 0)) {
                         mapDrawLevels[t] = 0;
                     }
-
                 }
             }
         }
