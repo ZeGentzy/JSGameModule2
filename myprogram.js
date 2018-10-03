@@ -6,11 +6,14 @@
 load("cs10-txt-lib-0.4.js");
 
 // Hello Mr. Cheng,
-// 
+//
 // Your autoformatter is broken, so I didn't use it. Right click then click on
 // format if you want to see it get the indenting all wrong.
 //
 // Yours truely.
+
+
+// java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
 // Todo:
 // [x] Terminal Setup
@@ -27,6 +30,7 @@ load("cs10-txt-lib-0.4.js");
 //      https://github.com/skishore/z/blob/master/permissive-fov/permissive-fov.cc
 // [ ] AI & Monsters
 // [ ] Combat
+// [ ] Multilevel
 // [ ] Sound
 // [ ] Player Inventory
 // [ ] Stats
@@ -48,7 +52,7 @@ if (!LOOK_GOOD) {
 
 print("This game has been tested with resolutions of 80 by 24 and higher. Please set your terminal to 80 by 24 or higher.");
 print("Hit enter to continue.");
-getInput();
+//getInput();
 
 /*
  * Java imports
@@ -170,7 +174,7 @@ function CordPair(x, y) {
  * For legal reasons I must include this:
  *
  * Copyright JS Foundation and other contributors, https://js.foundation/
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -178,10 +182,10 @@ function CordPair(x, y) {
  * distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to
  * the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -329,6 +333,7 @@ let constants = Object.freeze({
     "LEVEL_X_DIM": 64,
     "LEVEL_Y_DIM": 64,
 
+    // Thank you ##latin @ freenode.net for helping translate this.
     "GAME_NAME": "Dominīs Temporis",
 
     "HEAD_ACTION": 0,
@@ -719,6 +724,7 @@ function NewDirtTile() {
     ret.type = constants.DIRT_TILE;
     ret.flashVisible = true;
     ret.canWalk = false;
+    ret.opaque = true;
     return ret;
 }
 
@@ -727,6 +733,7 @@ function NewWallTile() {
     ret.type = constants.WALL_TILE;
     ret.flashVisible = true;
     ret.canWalk = false;
+    ret.opaque = true;
     return ret;
 }
 
@@ -735,6 +742,7 @@ function NewStairsTile(up) {
     ret.type = up ? constants.UP_STAIRS_TILE : constants.DOWN_STAIRS_TILE;
     ret.flashVisible = true;
     ret.canWalk = true;
+    ret.opaque = false;
     return ret;
 }
 
@@ -743,6 +751,7 @@ function NewFloorTile() {
     ret.type = constants.FLOOR_TILE;
     ret.flashVisible = false;
     ret.canWalk = true;
+    ret.opaque = false;
 
     switch (random.nextInt(6)) {
         case 0:
@@ -768,6 +777,227 @@ function NewFloorTile() {
     return ret;
 }
 
+// Thanks:
+//      http://www.roguebasin.com/index.php?title=Permissive_Field_of_View_in_Python
+//      https://github.com/skishore/z/blob/master/permissive-fov/permissive-fov.cc
+//      https://web.archive.org/web/20170708200308/http://www.roguebasin.com/index.php?title=Precise_Permissive_Field_of_View
+function FOV(map, x1, y1, r, dir) {
+    let ret = Array(map.dims.x * map.dims.y);
+
+    for (let i = 0; i < ret.length; ++i) {
+        ret[i] = false;
+    }
+
+    function NewLine(x1, y1, x2, y2) {
+        return {
+            "x1": x1,
+            "y1": y1,
+            "x2": x2,
+            "y2": y2,
+
+            "dx": function() { return this.x2 - this.x1; },
+            "dy": function() { return this.y2 - this.y1; },
+
+            "PBellow": function(x, y) { return this.RelativeSlope(x, y) > 0; },
+            "PBellowOrCollinear": function(x, y) { return this.RelativeSlope(x, y) >= 0; },
+            "PAbove": function(x, y) { return this.RelativeSlope(x, y) < 0; },
+            "PAboveOrCollinear": function(x, y) { return this.RelativeSlope(x, y) <= 0; },
+            "PCollinear": function(x, y) { return this.RelativeSlope(x, y) == 0; },
+            "LCollinear": function(line) {
+                return this.PCollinear(line.x1, line.y1)
+                    && this.PCollinear(line.x2, line.y2);
+            },
+            "RelativeSlope": function(x, y) {
+                return (this.dy() * (this.x2 - x)) - (this.dx() * (this.y2 - y));
+            }
+        };
+    }
+
+    function NewViewBump(x, y, par) {
+        return {
+            "x": x,
+            "y": y,
+            "par": par
+        };
+    }
+
+    function NewView(shL, stL) {
+        return {
+            "shallowLine": shL,
+            "steepLine": stL,
+            "shallowBump": null,
+            "steepBump": null
+        };
+    }
+
+    function AddShallowBump(x, y, activeViews, viewIndex) {
+        activeViews[viewIndex].shallowLine.x2 = x;
+        activeViews[viewIndex].shallowLine.y2 = y;
+
+        activeViews[viewIndex].shallowBump = NewViewBump(
+            x,
+            y,
+            activeViews[viewIndex].shallowBump
+        );
+
+        let cur = activeViews[viewIndex].steepBump;
+        while (cur != null) {
+            if (activeViews[viewIndex].shallowLine.PAbove(cur.x, cur.y)) {
+                activeViews[viewIndex].shallowLine.x1 = cur.x;
+                activeViews[viewIndex].shallowLine.y1 = cur.y;
+            }
+
+            cur = cur.par;
+        }
+    }
+
+    function AddSteepBump(x, y, activeViews, viewIndex) {
+        activeViews[viewIndex].steepLine.x2 = x;
+        activeViews[viewIndex].steepLine.y2 = y;
+
+        activeViews[viewIndex].steepBump = NewViewBump(
+            x,
+            y,
+            activeViews[viewIndex].steepBump
+        );
+
+        let cur = activeViews[viewIndex].shallowBump;
+        while (cur != null) {
+            if (activeViews[viewIndex].steepLine.PBellow(cur.x, cur.y)) {
+                activeViews[viewIndex].steepLine.x1 = cur.x;
+                activeViews[viewIndex].steepLine.y1 = cur.y;
+            }
+
+            cur = cur.par;
+        }
+    }
+
+    function CheckView(activeViews, viewIndex) {
+        let shallowLine = activeViews[viewIndex].shallowLine;
+        let steepLine = activeViews[viewIndex].steepLine;
+
+        if (
+            shallowLine.LCollinear(steepLine)
+            && (shallowLine.PCollinear(0, 1) || shallowLine.PCollinear(1, 0))
+        ) {
+            activeViews.splice(viewIndex.m, 1);
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    function VisitCoord(x1, y1, x, y, dx, dy, viewIndex, activeViews) {
+        let topLeft = CordPair(x, y + 1);
+        let bottomRight = CordPair(x + 1, y);
+
+        while (
+            viewIndex.m < activeViews.length
+            && activeViews[viewIndex.m].steepLine.PBellowOrCollinear(bottomRight.x, bottomRight.y)
+        ) {
+            ++viewIndex.m;
+        }
+
+        if (
+            viewIndex.m == activeViews.length ||
+            activeViews[viewIndex.m].shallowLine.PAboveOrCollinear(topLeft.x, topLeft.y)
+        ) {
+            return;
+        }
+
+        let rx = x * dx;
+        let ry = y * dy;
+
+        let t = x1 + rx + (y1 + ry) * map.dims.x;
+        ret[t] = true;
+
+        let isBlocked = map.tiles[t].opaque;
+        if (!isBlocked) {
+            return;
+        }
+
+        if (
+            activeViews[viewIndex.m].shallowLine.PAbove(bottomRight.x, bottomRight.y)
+            && activeViews[viewIndex.m].steepLine.PBellow(topLeft.x, topLeft.y)
+        ) {
+            activeViews.splice(viewIndex.m, 1);
+        } else if (
+            activeViews[viewIndex.m].shallowLine.PAbove(bottomRight.x, bottomRight.y)
+        ) {
+            AddShallowBump(topLeft.x, topLeft.y, activeViews, viewIndex.m);
+            CheckView(activeViews, viewIndex.m);
+        } else if (
+            activeViews[viewIndex.m].steepLine.PBellow(topLeft.x, topLeft.y)
+        ) {
+            AddSteepBump(bottomRight.x, bottomRight.y, activeViews, viewIndex.m);
+            CheckView(activeViews, viewIndex.m)
+        } else {
+            let shallowViewIndex = viewIndex.m;
+            let steepViewIndex = ++viewIndex.m;
+            activeViews.splice(shallowViewIndex, 0, Extend(true, {}, activeViews[shallowViewIndex]))
+
+            AddSteepBump(bottomRight.x, bottomRight.y, activeViews, shallowViewIndex);
+            if (!CheckView(activeViews, shallowViewIndex)) {
+                --viewIndex;
+                --steepViewIndex;
+            }
+            AddShallowBump(topLeft.x, topLeft.y, activeViews, steepViewIndex);
+
+            CheckView(activeViews, steepViewIndex);
+        }
+    }
+
+    function CheckQuadrant(map, x1, y1, dx, dy, r) {
+        stderr.printf("SRT QUAD\n");
+        let activeViews = [];
+
+        let maxI = 4 * r;
+        let shallowLine = NewLine(0, 1, maxI, 0);
+        let steepLine = NewLine(1, 0, 0, maxI);
+        activeViews[activeViews.length] = NewView(shallowLine, steepLine);
+
+        let viewIndex = {"m": 0};
+
+        let r2 = r * r;
+        let i = 1;
+        stderr.printf("MAX I %f\n", maxI);
+        while (i <= maxI && activeViews.length > 0) {
+            let startJ = Math.max(0, i - r);
+            let maxJ = Math.min(r, i);
+            stderr.printf("%f MAX J ST J %f %f BEC %f %f\n", i, maxJ, startJ, r, i);
+
+            let j = startJ;
+            while (j <= maxJ  && viewIndex.m < activeViews.length) {
+                let x = i - j;
+                let y = j;
+                if (
+                    x1 + (dx * x) >= 0 && x1 + (dx * x) < map.dims.x
+                    && y1 + (dy * y) >= 0 && y1 + (dy * y) < map.dims.y
+                    && x * x + y * y <= r2
+                ) {
+                    stderr.printf("Visiting %f %f (%f %f)\n", x, y, i, j);
+                    VisitCoord(x1, y1, x, y, dx, dy, viewIndex, activeViews);
+                }
+                ++j;
+            }
+            ++i;
+            viewIndex = {"m": 0};
+        }
+        stderr.printf("END QUAD\n");
+    }
+
+    ret[x1 + y1 * map.dims.x] = true;
+
+    // TODO: dir
+
+    CheckQuadrant(map, x1, y1,  1, -1, r);
+    CheckQuadrant(map, x1, y1, -1, -1, r);
+    CheckQuadrant(map, x1, y1,  1,  1, r);
+    CheckQuadrant(map, x1, y1, -1,  1, r);
+
+    return ret;
+}
+
 let lf = NewLogFactory();
 lf.EnableSGRS([SGR.BOLD], 0);
 lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
@@ -782,7 +1012,7 @@ try {
      */
     {
         let termFactory = new com.googlecode.lanterna.terminal.DefaultTerminalFactory();
-        term = termFactory.createTerminal();
+        term = termFactory.createTerminalEmulator();
     }
     screen = new TerminalScreen(term);
     screen.startScreen();
@@ -793,7 +1023,7 @@ try {
     /*
      * Main Game Functions
      */
-    
+
     function IsWall(tiles, t) {
         return tiles[t].type == constants.WALL_TILE;
     }
@@ -803,8 +1033,8 @@ try {
         for (let i = 0; i < offsets.length; ++i) {
             let t = offsets[i].x + x1 + (offsets[i].y + y1) * x;
             if (
-                offsets[i].x + x1 < 0 || offsets[i].y + y1 < 0 
-                || offsets[i].x + x1 >= x || offsets[i].y + y1 >= y 
+                offsets[i].x + x1 < 0 || offsets[i].y + y1 < 0
+                || offsets[i].x + x1 >= x || offsets[i].y + y1 >= y
                 || tiles[t]
             ) {
                 ret += 1;
@@ -842,7 +1072,7 @@ try {
                 ++cex;
             }
 
-            let csx = r.sx; 
+            let csx = r.sx;
             while ((csx - 1) >= 0 && !tiles[csx - 1 + r.y * x]) {
                 --csx;
             }
@@ -850,7 +1080,7 @@ try {
             for (let cx = csx; cx <= cex; ++cx) {
                 ret[cx + r.y * x] = false;
             }
-            
+
             function Line(tiles, r, csx, cex, ranges, up) {
                 let yO = up ? -1 : 1;
                 let go = up ? r.goUp : r.goDown;
@@ -917,14 +1147,15 @@ try {
                     let t = cx + cy * x;
                     let dirt = random.nextInt(100) < 40;
                     if (dirt) {
-                        tiles[t] = true;
+                        //tiles[t] = true;
+                        tiles[t] = false;
                     } else {
                         tiles[t] = false;
                     }
                 }
             }
 
-            for (let i = 0; i < 7; ++i) {
+            /*for (let i = 0; i < 7; ++i) {
                 let prvTiles = tiles;
                 tiles = new Array(x * y);
 
@@ -932,13 +1163,13 @@ try {
                     for (let cx = 0; cx < x; ++cx) {
                         let t = cx + cy * x;
                         let n1 = TilesOfTypeAroundTile(
-                            prvTiles, 
+                            prvTiles,
                             x, y,
                             cx, cy,
                             offsets1
                         );
                         let n2 = TilesOfTypeAroundTile(
-                            prvTiles, 
+                            prvTiles,
                             x, y,
                             cx, cy,
                             offsets2
@@ -961,7 +1192,7 @@ try {
                     for (let cx = 0; cx < x; ++cx) {
                         let t = cx + cy * x;
                         let n1 = TilesOfTypeAroundTile(
-                            prvTiles, 
+                            prvTiles,
                             x, y,
                             cx, cy,
                             offsets1
@@ -984,7 +1215,7 @@ try {
                     for (let cx = 0; cx < x; ++cx) {
                         let t = cx + cy * x;
                         let n1 = TilesOfTypeAroundTile(
-                            prvTiles, 
+                            prvTiles,
                             x, y,
                             cx, cy,
                             offsets1
@@ -997,7 +1228,13 @@ try {
                         }
                     }
                 }
-            }
+            }*/
+
+            tiles[2 + 1 * x] = true;
+
+            tiles[5 + 5 * x] = true;
+            tiles[7 + 5 * x] = true;
+            tiles[7 + 6 * x] = true;
 
             let rTile = random.nextInt(tiles.length);
             while (tiles[rTile]) {
@@ -1006,10 +1243,22 @@ try {
 
             let prvTiles = tiles;
             tiles = FloodFill(
-                prvTiles, 
+                prvTiles,
                 x, y,
                 rTile % x, Math.floor(rTile / x)
             );
+
+            for (let cx = 0; cx < x; ++cx) {
+                let t = cx + (y - 1) * x;
+                tiles[cx] = true;
+                tiles[t] = true;
+            }
+
+            for (let cy = 0; cy < y; ++cy) {
+                let t = cy * x;
+                tiles[t + x - 1] = true;
+                tiles[t] = true;
+            }
 
             let fc = 0;
             for (let i = 0; i < tiles.length; ++i) {
@@ -1059,9 +1308,9 @@ try {
         }
 
         creatures[creatures.length] = {
-            "type": constants.CHARACTER_CREATURE, 
-            "x": u % constants.LEVEL_X_DIM, 
-            "y": Math.floor(u / constants.LEVEL_X_DIM), 
+            "type": constants.CHARACTER_CREATURE,
+            "x": u % constants.LEVEL_X_DIM,
+            "y": Math.floor(u / constants.LEVEL_X_DIM),
             "dir": constants.NORTH_DIR,
             "hp": constants.MAX_PLAYER_HP,
             "sp": constants.MAX_PLAYER_SP,
@@ -1128,7 +1377,7 @@ try {
     }
 
     function AngleDir(a, b) {
-        return Math.max(a, b) - Math.min(a, b) > 4 
+        return Math.max(a, b) - Math.min(a, b) > 4
             ? 8 - Math.max(a, b) + Math.min(a, b)
             : Math.max(a, b) - Math.min(a, b);
     }
@@ -1162,8 +1411,8 @@ try {
     }
 
     function MoveCreature(map, offset, creature) {
-        if (!CanMoveCreature(map, offset, creature)) { 
-            return false; 
+        if (!CanMoveCreature(map, offset, creature)) {
+            return false;
         }
 
         let c = map.creatures[creature];
@@ -1343,7 +1592,7 @@ try {
                 let cBellow = IsWall(map.tiles, t + map.dims.x) ? 2 : 0;
                 let cLeft = IsWall(map.tiles, t - 1) ? 4 : 0;
                 let cRight = IsWall(map.tiles, t + 1) ? 8 : 0;
-                
+
                 let rchar;
                 switch (cAbove + cBellow + cLeft  + cRight) {
                     case 0:
@@ -1438,6 +1687,14 @@ try {
         let startX = Math.floor(mapHead.creatures[pLoc].x - length / 2);
         let startY = Math.floor(mapHead.creatures[pLoc].y - width / 2);
 
+        let fov = FOV(
+            mapHead,
+            mapHead.creatures[pLoc].x,
+            mapHead.creatures[pLoc].y,
+            10,
+            null
+        );
+
         let map = mapLevels[curLevel];
         for (let yO = 0; yO < width; ++yO) {
             for (let xO = 0; xO < length; ++xO) {
@@ -1449,6 +1706,7 @@ try {
                     && x < mapHead.dims.x
                     && y >= 0
                     && y < mapHead.dims.y
+                    && fov[x + y * mapHead.dims.x]
                 ) {
                     // Draw Order:
                     // 1. Creatures
@@ -1703,14 +1961,22 @@ try {
         if (thisInput.getKeyType() == KeyType.Backspace) {
             RewindToLastChoice();
             autoCommit = false;
-        } else if (
-            thisInput.getKeyType() == KeyType.Enter 
-            || autoCommit && oldAC == autoCommit 
-                && (pc.msp - pc.sp) > pc.msp * constants.SP_REFILL_RATE
+        } else if (thisInput.getKeyType() == KeyType.Enter) {
+            Commit();
+            autoCommit = false;
+        }
+
+        while (
+            thisInput.getKeyType() != KeyType.Enter
+            && autoCommit && oldAC == autoCommit
+            && (pc.msp - pc.sp) > pc.msp * constants.SP_REFILL_RATE
         ) {
             RewindToLastChoice();
             Commit();
+            pLoc = FindPlayerLocation(mapHead);
+            ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
             PlayerIssue(pLoc);
+            pc = mapHead.creatures[pLoc];
         }
 
         pLoc = FindPlayerLocation(mapHead);
