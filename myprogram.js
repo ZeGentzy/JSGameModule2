@@ -23,19 +23,16 @@ load("cs10-txt-lib-0.4.js");
 // [x] Consistent Random
 // [x] Action replays + auto commit
 // [x] Player Movment
-// [ ] FOV
-//      200 deg
-//      https://web.archive.org/web/20160501211948/http://www.roguebasin.com/index.php?title=Precise_Permissive_Field_of_View
-//      https://web.archive.org/web/20170708203224/http://www.roguebasin.com/index.php?title=Permissive_Field_of_View_in_Python
-//      https://github.com/skishore/z/blob/master/permissive-fov/permissive-fov.cc
+// [x] FOV
+// [x] Multilevel
 // [ ] AI & Monsters
 // [ ] Combat
-// [ ] Multilevel
 // [ ] Sound
 // [ ] Player Inventory
 // [ ] Stats
 // [ ] Items
 // [ ] Chests
+// [ ] FOV edge cases fixes.
 // [ ] Better map gen variety (e.g. Rooms, doors, ect).
 // [ ] Tutorial
 
@@ -330,8 +327,8 @@ let constants = Object.freeze({
     "MAX_PLAYER_HP": 1000,
     "MAX_PLAYER_SP": 1000,
 
-    "LEVEL_X_DIM": 64,
-    "LEVEL_Y_DIM": 64,
+    "LEVEL_X_DIM": 8,
+    "LEVEL_Y_DIM": 8,
 
     // Thank you ##latin @ freenode.net for helping translate this.
     "GAME_NAME": "Dominīs Temporis",
@@ -347,6 +344,8 @@ let constants = Object.freeze({
     "MOVE_NORTHWEST_ACTION": 8,
     "ROTATE_CLOCKWISE_ACTION": 9,
     "ROTATE_COUNTERCLOCKWISE_ACTION": 10,
+    "ACCEND_UPWARDS_ACTION": 11,
+    "DECCEND_DOWNARDS_ACTION": 12,
 
     "SP_REFILL_RATE": 0.2
 });
@@ -359,7 +358,6 @@ let gameover = false;
 let thisInput;
 let screen;
 let term;
-let log = [];
 
 let random = new Random(java.lang.System.currentTimeMillis());
 let crandom = {
@@ -475,35 +473,35 @@ function Replay(r) {
     switch (nextTurnHead.action) {
         case constants.MOVE_NORTH_ACTION:
             suc = MoveCreature(mapHead, CordPair(0, -1), creature);
-            cost = (AngleDir(constants.MOVE_NORTH_ACTION, dc.dir) * 0.1 + 1) * 100;
+            cost = (AngleDir(constants.NORTH_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_NORTHEAST_ACTION:
             suc = MoveCreature(mapHead, CordPair(1, -1), creature);
-            cost = (AngleDir(constants.MOVE_NORTHEAST_ACTION, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
+            cost = (AngleDir(constants.NORTHEAST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_EAST_ACTION:
             suc = MoveCreature(mapHead, CordPair(1, 0), creature);
-            cost = (AngleDir(constants.MOVE_EAST_ACTION, dc.dir) * 0.1 + 1) * 100;
+            cost = (AngleDir(constants.EAST_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_SOUTHEAST_ACTION:
             suc = MoveCreature(mapHead, CordPair(1, 1), creature);
-            cost = (AngleDir(constants.MOVE_SOUTHEAST_ACTION, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
+            cost = (AngleDir(constants.SOUTHEAST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_SOUTH_ACTION:
             suc = MoveCreature(mapHead, CordPair(0, 1), creature);
-            cost = (AngleDir(constants.MOVE_SOUTH_ACTION, dc.dir) * 0.1 + 1) * 100;
+            cost = (AngleDir(constants.SOUTH_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_SOUTHWEST_ACTION:
             suc = MoveCreature(mapHead, CordPair(-1, 1), creature);
-            cost = (AngleDir(constants.MOVE_SOUTHWEST_ACTION, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
+            cost = (AngleDir(constants.SOUTHWEST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_WEST_ACTION:
             suc = MoveCreature(mapHead, CordPair(-1, 0), creature);
-            cost = (AngleDir(constants.MOVE_WEST_ACTION, dc.dir) * 0.1 + 1) * 100;
+            cost = (AngleDir(constants.WEST_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_NORTHWEST_ACTION:
             suc = MoveCreature(mapHead, CordPair(-1, -1), creature);
-            cost = (AngleDir(constants.MOVE_NORTHWEST_ACTION, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
+            cost = (AngleDir(constants.NORTHWEST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
 
         case constants.ROTATE_CLOCKWISE_ACTION:
@@ -526,6 +524,39 @@ function Replay(r) {
             cost = Math.max(cost, 0);
             suc = true;
             tirednessMatters = false;
+            break;
+
+        case constants.ACCEND_UPWARDS_ACTION:
+            if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.UP_STAIRS_TILE) {
+                if (curLevel > 0) {
+                    --curLevel;
+                    SetupLevel(false);
+                    if (nextTurnHead.played) {
+                        crandom.StopReplaying();
+                    } else {
+                        crandom.StopRecording();
+                    }
+                    Revert(true);
+                    return true;
+                }
+            }
+            suc = false;
+            cost = 0;
+            break;
+        case constants.DECCEND_DOWNARDS_ACTION:
+            if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.DOWN_STAIRS_TILE) {
+                ++curLevel;
+                SetupLevel(true);
+                if (nextTurnHead.played) {
+                    crandom.StopReplaying();
+                } else {
+                    crandom.StopRecording();
+                }
+                Revert(true);
+                return true;
+            }
+            suc = false;
+            cost = 0;
             break;
 
         default:
@@ -564,7 +595,44 @@ function Replay(r) {
     dc.sp -= cost;
 
     if (isPlayer) {
+        switch (nextTurnHead.action) {
+            case constants.MOVE_NORTH_ACTION:
+            case constants.MOVE_NORTHEAST_ACTION:
+            case constants.MOVE_EAST_ACTION:
+            case constants.MOVE_SOUTHEAST_ACTION:
+            case constants.MOVE_SOUTH_ACTION:
+            case constants.MOVE_SOUTHWEST_ACTION:
+            case constants.MOVE_WEST_ACTION:
+            case constants.MOVE_NORTHWEST_ACTION:
+                if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.UP_STAIRS_TILE) {
+                    let lf = NewLogFactory();
+                    if (curLevel == 0) {
+                        lf.SetTxt("The surface's light casts it's shadow down,");
+                        lf.CommitToLog();
+                        lf.SetTxt("knowing you can't go back up makes you frown,");
+                        lf.CommitToLog();
+                        lf.SetTxt("lest you find your head fallen on the ground.");
+                        lf.CommitToLog();
+                    } else {
+                        lf.SetTxt("In the dark you can construe,");
+                        lf.CommitToLog();
+                        lf.SetTxt("a skyward winding corkscrew.");
+                        lf.CommitToLog();
+                    }
+                }
+                else if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.DOWN_STAIRS_TILE) {
+                    let lf = NewLogFactory();
+                    lf.SetTxt("From the stairs, emanates megatons of evil,");
+                    lf.CommitToLog();
+                    lf.SetTxt("whipin' you back into a state of vigil.");
+                    lf.CommitToLog();
+                }
+                break;
+        }
+
         // Other creatures calculations
+    } else {
+
     }
 
     if (nextTurnHead.played) {
@@ -580,6 +648,19 @@ function Replay(r) {
     return true;
 }
 
+function Revert(comp) {
+    mapHead = Extend(true, {}, mapLevels[curLevel]);
+    turnHead = turnData[0];
+    let prvTurnSel = turnSel;
+    turnSel = [];
+
+    if (comp) {
+        turnHead.next = [];
+    }
+
+    return prvTurnSel;
+}
+
 function Rewind(r, abandon) {
     ASSERT(r >= 0 && r <= turnSel.length, "Invalid selections to rewind.");
 
@@ -588,10 +669,7 @@ function Rewind(r, abandon) {
         lp = turnSel.pop();
     }
 
-    mapHead = Extend(true, {}, mapLevels[curLevel]);
-    turnHead = turnData[0];
-    let prvTurnSel = turnSel;
-    turnSel = [];
+    let prvTurnSel = Revert(false);
 
     for (let i = 0; i < prvTurnSel.length; ++i) {
         ASSERT(Replay(prvTurnSel[i]), "All commands in the rewind queue should be valid.");
@@ -628,7 +706,7 @@ function RewindToLastChoice() {
 function IssueCommand(cr, act) {
     let i;
     for (i = 0; i < turnHead.next.length; ++i) {
-        if (turnHead.next[i].action == act && turnHead.next[i].action) {
+        if (turnHead.next[i].action == act) {
             ASSERT(Replay(i), "Pre issued commands should be valid.");
             return;
         }
@@ -713,7 +791,7 @@ function NewLogFactory() {
             "txt": this.txt,
         };
 
-        log[log.length] = Extend(true, {}, next);
+        mapHead.log[mapHead.log.length] = Extend(true, {}, next);
     };
 
     return ret;
@@ -880,7 +958,7 @@ function FOV(map, x1, y1, r, dir) {
             shallowLine.LCollinear(steepLine)
             && (shallowLine.PCollinear(0, 1) || shallowLine.PCollinear(1, 0))
         ) {
-            activeViews.splice(viewIndex.m, 1);
+            activeViews.splice(viewIndex, 1);
             return false;
         } else {
             return true;
@@ -943,28 +1021,28 @@ function FOV(map, x1, y1, r, dir) {
             }
             AddShallowBump(topLeft.x, topLeft.y, activeViews, steepViewIndex);
 
-            CheckView(activeViews, steepViewIndex);
+            if (!CheckView(activeViews, steepViewIndex)) {
+                --viewIndex;
+            }
         }
     }
 
-    function CheckQuadrant(map, x1, y1, dx, dy, r) {
-        stderr.printf("SRT QUAD\n");
+    function CheckQuadrant(map, x1, y1, dx, dy, r, down, up) {
         let activeViews = [];
 
         let maxI = 4 * r;
-        let shallowLine = NewLine(0, 1, maxI, 0);
-        let steepLine = NewLine(1, 0, 0, maxI);
+        let partI = Math.floor(3.9 * r);
+        let shallowLine = NewLine(0, 1, maxI, up ? partI : 0);
+        let steepLine = NewLine(1, 0, down ? partI : 0, maxI);
         activeViews[activeViews.length] = NewView(shallowLine, steepLine);
 
         let viewIndex = {"m": 0};
 
         let r2 = r * r;
         let i = 1;
-        stderr.printf("MAX I %f\n", maxI);
         while (i <= maxI && activeViews.length > 0) {
             let startJ = Math.max(0, i - r);
             let maxJ = Math.min(r, i);
-            stderr.printf("%f MAX J ST J %f %f BEC %f %f\n", i, maxJ, startJ, r, i);
 
             let j = startJ;
             while (j <= maxJ  && viewIndex.m < activeViews.length) {
@@ -975,7 +1053,6 @@ function FOV(map, x1, y1, r, dir) {
                     && y1 + (dy * y) >= 0 && y1 + (dy * y) < map.dims.y
                     && x * x + y * y <= r2
                 ) {
-                    stderr.printf("Visiting %f %f (%f %f)\n", x, y, i, j);
                     VisitCoord(x1, y1, x, y, dx, dy, viewIndex, activeViews);
                 }
                 ++j;
@@ -983,28 +1060,25 @@ function FOV(map, x1, y1, r, dir) {
             ++i;
             viewIndex = {"m": 0};
         }
-        stderr.printf("END QUAD\n");
     }
 
     ret[x1 + y1 * map.dims.x] = true;
 
-    // TODO: dir
-
-    CheckQuadrant(map, x1, y1,  1, -1, r);
-    CheckQuadrant(map, x1, y1, -1, -1, r);
-    CheckQuadrant(map, x1, y1,  1,  1, r);
-    CheckQuadrant(map, x1, y1, -1,  1, r);
+    if (AngleDir(constants.NORTHEAST_DIR, dir) < 3) {
+        CheckQuadrant(map, x1, y1,  1, -1, r, dir == constants.SOUTHEAST_DIR, dir == constants.NORTHWEST_DIR);
+    }
+    if (AngleDir(constants.NORTHWEST_DIR, dir) < 3) {
+        CheckQuadrant(map, x1, y1, -1, -1, r, dir == constants.SOUTHWEST_DIR, dir == constants.NORTHEAST_DIR);
+    }
+    if (AngleDir(constants.SOUTHEAST_DIR, dir) < 3) {
+        CheckQuadrant(map, x1, y1,  1,  1, r, dir == constants.NORTHEAST_DIR, dir == constants.SOUTHWEST_DIR);
+    }
+    if (AngleDir(constants.SOUTHWEST_DIR, dir) < 3) {
+        CheckQuadrant(map, x1, y1, -1,  1, r, dir == constants.NORTHWEST_DIR, dir == constants.SOUTHEAST_DIR);
+    }
 
     return ret;
 }
-
-let lf = NewLogFactory();
-lf.EnableSGRS([SGR.BOLD], 0);
-lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
-lf.DisableSGRS([SGR.UNDERLINE], "Welcome to".length + constants.GAME_NAME.length + 1);
-lf.SetFg(TextColor.ANSI.GREEN, 0);
-lf.SetTxt("Welcome to " + constants.GAME_NAME + "!");
-lf.CommitToLog();
 
 try {
     /*
@@ -1296,39 +1370,88 @@ try {
         return [];
     }
 
-    function SetupLevel() {
-        let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
-        let creatures = SpawnCreatures(tiles);
+    function SetupLevel(down) {
+        if (curLevel == mapLevels.length) {
+            let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
+            let creatures = SpawnCreatures(tiles);
+
+            mapLevels[curLevel] = {
+                "tiles": tiles,
+                "creatures": creatures,
+                "items": [],
+                "dims": CordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
+                "log": [],
+            };
+        }
 
         let u;
-        for (u = 0; u < tiles.length; ++u) {
-            if (tiles[u].type == constants.UP_STAIRS_TILE) {
+        for (u = 0; u < mapLevels[curLevel].tiles.length; ++u) {
+            if (
+                !down && mapLevels[curLevel].tiles[u].type == constants.DOWN_STAIRS_TILE
+                || down && mapLevels[curLevel].tiles[u].type == constants.UP_STAIRS_TILE
+            ) {
                 break;
             }
         }
 
-        creatures[creatures.length] = {
-            "type": constants.CHARACTER_CREATURE,
-            "x": u % constants.LEVEL_X_DIM,
-            "y": Math.floor(u / constants.LEVEL_X_DIM),
-            "dir": constants.NORTH_DIR,
-            "hp": constants.MAX_PLAYER_HP,
-            "sp": constants.MAX_PLAYER_SP,
-            "mhp": constants.MAX_PLAYER_HP,
-            "msp": constants.MAX_PLAYER_SP,
-            "waitTime": 0,
-        };
-
-        mapLevels[curLevel] = {
-            "tiles": tiles,
-            "creatures": creatures,
-            "items": [],
-            "dims": CordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
-        };
+        if (curLevel == 0 && down) {
+            mapLevels[curLevel].creatures[mapLevels[curLevel].creatures.length] = {
+                "type": constants.CHARACTER_CREATURE,
+                "x": u % constants.LEVEL_X_DIM,
+                "y": Math.floor(u / constants.LEVEL_X_DIM),
+                "dir": constants.NORTH_DIR,
+                "hp": constants.MAX_PLAYER_HP,
+                "sp": constants.MAX_PLAYER_SP,
+                "mhp": constants.MAX_PLAYER_HP,
+                "msp": constants.MAX_PLAYER_SP,
+                "waitTime": 0,
+            };
+        } else if (down) {
+            let pLoc = FindPlayerLocation(mapLevels[curLevel]);
+            let opLoc = FindPlayerLocation(mapLevels[curLevel - 1]);
+            mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel - 1].creatures[pLoc];
+            mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
+            mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
+        } else {
+            let pLoc = FindPlayerLocation(mapLevels[curLevel]);
+            let opLoc = FindPlayerLocation(mapLevels[curLevel + 1]);
+            mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel + 1].creatures[pLoc];
+            mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
+            mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
+        }
 
         mapDrawLevels = new Array(mapLevels[curLevel].tiles.length);
         for (let i = 0; i < mapLevels[curLevel].tiles.length; ++i) {
             mapDrawLevels[i] = 0;
+        }
+
+        mapLevels[curLevel].log = [];
+        mapHead = mapLevels[curLevel];
+
+        if (curLevel == 0) {
+            let lf = NewLogFactory();
+            lf.SetTxt("You're sins banish you from the land above,");
+            lf.CommitToLog();
+            lf.SetTxt("Accend only with a head on a plate,");
+            lf.CommitToLog();
+            lf.SetTxt("Yours or the monster's, when either combust,");
+            lf.CommitToLog();
+            lf.SetTxt("Lest they take into their own hands your fate.");
+            lf.CommitToLog();
+            lf.EnableSGRS([SGR.BOLD], 0);
+            lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
+            lf.DisableSGRS([SGR.UNDERLINE], "Welcome to".length + constants.GAME_NAME.length + 1);
+            lf.SetFg(TextColor.ANSI.GREEN, 0);
+            lf.SetTxt("Welcome to " + constants.GAME_NAME + "!");
+            lf.CommitToLog();
+        } else if (down) {
+            let lf = NewLogFactory();
+            lf.SetTxt("You decend closer to the great evil.");
+            lf.CommitToLog();
+        } else {
+            let lf = NewLogFactory();
+            lf.SetTxt("You flee upwards, closer to god's domain, in fear.");
+            lf.CommitToLog();
         }
 
         mapHead = Extend(true, {}, mapLevels[curLevel]);
@@ -1480,8 +1603,8 @@ try {
 
         let linesSoFar = 0;
         let i;
-        for (i = log.length - 1; i >= 0 && linesSoFar < logLines; --i) {
-            linesSoFar += Math.ceil(log[i].txt.length / lineLen);
+        for (i = mapHead.log.length - 1; i >= 0 && linesSoFar < logLines; --i) {
+            linesSoFar += Math.ceil(mapHead.log[i].txt.length / lineLen);
         }
 
         let partials = Math.max(0, linesSoFar - logLines) * lineLen;
@@ -1489,29 +1612,29 @@ try {
         ++i;
 
         linesSoFar = 0;
-        for (; i < log.length; ++i) {
+        for (; i < mapHead.log.length; ++i) {
             let tg = screen.newTextGraphics();
-            let wrapedLines = Math.ceil(log[i].txt.length / lineLen);
+            let wrapedLines = Math.ceil(mapHead.log[i].txt.length / lineLen);
             let charsSoFar = 0;
 
             let j = 0;
             let k = 0;
             let l = 0;
-            for (let m = first ? partials : 0; m < log[i].txt.length; ++m, ++charsSoFar) {
+            for (let m = first ? partials : 0; m < mapHead.log[i].txt.length; ++m, ++charsSoFar) {
                 if (charsSoFar == lineLen) {
                     charsSoFar = 0;
                     ++linesSoFar;
                 }
 
-                for (; j < log[i].sgrs.length && log[i].sgrs[j].pos < m; ++j) {}
-                for (; k < log[i].fgs.length  && log[i].fgs[k].pos < m; ++k) {}
-                for (; l < log[i].bgs.length  && log[i].bgs[l].pos < m; ++l) {}
+                for (; j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos < m; ++j) {}
+                for (; k < mapHead.log[i].fgs.length  && mapHead.log[i].fgs[k].pos < m; ++k) {}
+                for (; l < mapHead.log[i].bgs.length  && mapHead.log[i].bgs[l].pos < m; ++l) {}
 
-                if (j < log[i].sgrs.length && log[i].sgrs[j].pos == m) {
-                    for (let key in log[i].sgrs[j].sgrs) {
+                if (j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos == m) {
+                    for (let key in mapHead.log[i].sgrs[j].sgrs) {
                         if (
-                            log[i].sgrs[j].sgrs.hasOwnProperty(key)
-                            && log[i].sgrs[j].sgrs[key]
+                            mapHead.log[i].sgrs[j].sgrs.hasOwnProperty(key)
+                            && mapHead.log[i].sgrs[j].sgrs[key]
                         ) {
                             tg.enableModifiers([SGR.valueOf(key)]);
                         } else {
@@ -1519,19 +1642,20 @@ try {
                         }
                     }
                 }
-                if (k < log[i].fgs.length && log[i].fgs[k].pos == m) {
-                    tg.setForegroundColor(log[i].fgs[k].fg);
+                if (k < mapHead.log[i].fgs.length && mapHead.log[i].fgs[k].pos == m) {
+                    tg.setForegroundColor(mapHead.log[i].fgs[k].fg);
                 }
-                if (l < log[i].bgs.length && log[i].bgs[l].pos == m) {
-                    tg.SetBacgroundColor(log[i].bgs[l].bg);
+                if (l < mapHead.log[i].bgs.length && mapHead.log[i].bgs[l].pos == m) {
+                    tg.SetBacgroundColor(mapHead.log[i].bgs[l].bg);
                 }
 
+                stderr.printf("Gn print out %f %f %s\n", m, i, mapHead.log[i].txt[m]);
                 tg.setCharacter(
                     new TerminalPosition(
                         termSize.getColumns() * 2 / 3 + charsSoFar,
                         12 + linesSoFar
                     ),
-                    log[i].txt[m]
+                    mapHead.log[i].txt[m]
                 );
             }
             ++linesSoFar;
@@ -1692,7 +1816,7 @@ try {
             mapHead.creatures[pLoc].x,
             mapHead.creatures[pLoc].y,
             10,
-            null
+            mapHead.creatures[pLoc].dir
         );
 
         let map = mapLevels[curLevel];
@@ -1936,6 +2060,12 @@ try {
                 case '.':
                     IssueCommand(pLoc, constants.WAIT_ACTION);
                     break;
+                case '<':
+                    IssueCommand(pLoc, constants.ACCEND_UPWARDS_ACTION);
+                    break;
+                case '>':
+                    IssueCommand(pLoc, constants.DECCEND_DOWNARDS_ACTION);
+                    break;
             }
         }
     }
@@ -1995,7 +2125,7 @@ try {
         }
     }
 
-    SetupLevel();
+    SetupLevel(true);
 
     /*
      * Main Game Loop.
