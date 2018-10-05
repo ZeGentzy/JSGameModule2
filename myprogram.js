@@ -3,6 +3,56 @@
 // Program Name:
 //////////////////////////////////////////////////////////////////////////
 
+// Oh how beloved is my javascript,
+// where obj plus array is a valid script,
+// where the errors are far and few between,
+// yet where randomness is constantly seen.
+//
+// Welcome to the land with the least green yards,
+// where performance is only for retards.
+// Stacktraces, or performance? Pick one.
+// Actually, you will only get none.
+//
+// Want errors when accessing non-members?
+// Instead we'll put your results ina blender.
+// Ask, what does the `splice` of `undefined` do?
+// Removes the first element, who woulda knew!
+//
+// Want to make a clone of a variable?
+// I'm afraid we weren't that charitable.
+// Anywho, why do what you wanna go do?
+// Do you think we thought any of this through?
+//
+// Do your numbers not have the member `m`?
+// Well, to find, that bug's gonna be a gem.
+// Do you want something that isn't a float?
+// Well, you settle instead with `Math` `floor` quotes.
+//
+// So you want any constant vars today?
+// Just make do with `object` `freeze`, okay?
+// Did you access any constant not there?
+// We *might* just give you a warning, we swear.
+//
+// Do you want a half decent debugger?
+// How 'bout this terrible little fucker?
+// It'll tell the line your exceptions lay 'pon,
+// If you tick some random fuckin' box on!
+//
+// You want a font bigger than point six?
+// Hey now, t'oesn't even have the basics,
+// with it's UI made out of duck' 'n' glue,
+// an' a carefully chosen white-on-blue.
+//
+// Fly to where you can access vars not passed,
+// and watch where your sanity gets blast'd!
+// Java calls might hand out errors, deadly,
+// or calls might just work, by luck, correctly.
+//
+// To the distant land where var'dics are arrays,
+// when pass'd to Java libs, unless one prays.
+// The shitty land that I'm forced to endure,
+// for all my modules, including numb' two.
+
 // java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
 // Todo:
