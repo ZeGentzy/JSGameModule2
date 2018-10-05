@@ -3,16 +3,6 @@
 // Program Name:
 //////////////////////////////////////////////////////////////////////////
 
-load("cs10-txt-lib-0.4.js");
-
-// Hello Mr. Cheng,
-//
-// Your autoformatter is broken, so I didn't use it. Right click then click on
-// format if you want to see it get the indenting all wrong.
-//
-// Yours truely.
-
-
 // java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
 // Todo:
@@ -25,31 +15,22 @@ load("cs10-txt-lib-0.4.js");
 // [x] Player Movment
 // [x] FOV
 // [x] Multilevel
-// [ ] AI & Monsters
-// [ ] Combat
+// [x] Last seen
+// [ ] AI & Monsters & Combat
+// [ ] Look around
+// [ ] Splash screen
+// [ ] FOV edge cases fixes. (Non visible walls, visible diagonals)
+// [ ] Light and visibility
 // [ ] Sound
+// [ ] AI & Monsters, revisited
 // [ ] Player Inventory
 // [ ] Stats
 // [ ] Items
 // [ ] Chests
-// [ ] FOV edge cases fixes.
 // [ ] Better map gen variety (e.g. Rooms, doors, ect).
 // [ ] Tutorial
-
-let LOOK_GOOD = true;
-
-if (!LOOK_GOOD) {
-    print(ANSI_RED + "XTerm doesn't support some good looking characters, I assume your going to test it in XTerm, so we default with some not so good looking ones. If your terminal does support them (any other terminal bassically), please go to the source code and flip the `LOOK_GOOD` flag on!");
-    print("\u001B[25mIt should be noted that some terminals don't support blinking (e.g. XTerm, LXTerminal, ect). This Text should be blinking.");
-    print("\u001B[25mHere is underlining and \u001B[7minversing and \u001B[1m bold and finally \u001B[9m crossed out.");
-    print("May I suggest xfce4-terminal?");
-    print(ANSI_RESET + "Hit enter to continue.");
-    getInput();
-}
-
-print("This game has been tested with resolutions of 80 by 24 and higher. Please set your terminal to 80 by 24 or higher.");
-print("Hit enter to continue.");
-//getInput();
+// [ ] Help screen
+// [ ] Music
 
 /*
  * Java imports
@@ -59,6 +40,7 @@ let stdin = new java.io.BufferedReader(new java.io.InputStreamReader(java.lang.S
 let stderr = java.lang.System.err;
 let Thread = java.lang.Thread;
 let Random = java.util.Random;
+let Map = java.util.HashMap;
 
 let TextColor = com.googlecode.lanterna.TextColor;
 let SGR = com.googlecode.lanterna.SGR;
@@ -69,6 +51,20 @@ let TerminalPosition = com.googlecode.lanterna.TerminalPosition;
 let TerminalSize = com.googlecode.lanterna.TerminalSize;
 let Symbols = com.googlecode.lanterna.Symbols;
 let Screen = com.googlecode.lanterna.screen.Screen;
+
+let LOOK_GOOD = true;
+
+if (!LOOK_GOOD) {
+    stdout.printf("\u001B[31mXTerm doesn't support some good looking characters, I assume your going to test it in XTerm, so we default with some not so good looking ones. If your terminal does support them (any other terminal bassically), please go to the source code and flip the `LOOK_GOOD` flag on!\n");
+    stdout.printf("\u001B[25mIt should be noted that some terminals don't support blinking (e.g. XTerm, LXTerminal, ect). This Text should be blinking.\n");
+    stdout.printf("\u001B[25mHere is underlining and \u001B[7minversing and \u001B[1m bold and finally \u001B[9m crossed out.\n");
+    stdout.printf("\u001B[0m\u001B[32mMay I suggest xfce4-terminal?\n");
+    stdout.printf("\u001B[0m\n");
+    Thread.sleep(2000);
+}
+
+stdout.printf("This game has been tested with resolutions of 80 by 24 and higher. Please set your terminal to 80 by 24 or higher.\n");
+//Thread.sleep(2000);
 
 if (!LOOK_GOOD) {
     Symbols = Object.freeze({
@@ -160,7 +156,7 @@ function ToChar(s) {
     return s.charCodeAt(0);
 }
 
-function CordPair(x, y) {
+function CoordPair(x, y) {
     return {
         "x": x,
         "y": y,
@@ -202,89 +198,89 @@ var IsFunction = function isFunction( obj ) {
 };
 
 // From jQuery source code.
-let IsPlainObject = function( obj ) {
+let IsPlainObject = function(obj) {
     var proto, Ctor;
 
     // Detect obvious negatives
     // Use toString instead of jQuery.type to catch host objects
-    if ( !obj || toString.call( obj ) !== "[object Object]" ) {
+    if (!obj || toString.call(obj) !== "[object Object]") {
         return false;
     }
 
-    proto = Object.getPrototypeOf( obj );
+    proto = Object.getPrototypeOf(obj);
 
-    // Objects with no prototype (e.g., `Object.create( null )`) are plain
-    if ( !proto ) {
+    // Objects with no prototype (e.g., `Object.create(null)`) are plain
+    if (!proto) {
         return true;
     }
 
     let class2type = {};
     let hasOwn = class2type.hasOwnProperty;
     let fnToString = hasOwn.toString;
-    let ObjectFunctionString = fnToString.call( Object );
+    let ObjectFunctionString = fnToString.call(Object);
     // Objects with prototype are plain iff they were constructed by a global Object function
-    Ctor = hasOwn.call( proto, "constructor" ) && proto.constructor;
-    return typeof Ctor === "function" && fnToString.call( Ctor ) === ObjectFunctionString;
+    Ctor = hasOwn.call(proto, "constructor") && proto.constructor;
+    return typeof Ctor === "function" && fnToString.call(Ctor) === ObjectFunctionString;
 };
 
 // From jQuery source code.
 let Extend;
 Extend = function() {
     var options, name, src, copy, copyIsArray, clone,
-        target = arguments[ 0 ] || {},
+        target = arguments[0] || {},
         i = 1,
         length = arguments.length,
         deep = false;
 
     // Handle a deep copy situation
-    if ( typeof target === "boolean" ) {
+    if (typeof target === "boolean") {
         deep = target;
 
         // Skip the boolean and the target
-        target = arguments[ i ] || {};
+        target = arguments[i] || {};
         i++;
     }
 
     // Handle case when target is a string or something (possible in deep copy)
-    if ( typeof target !== "object" && !IsFunction( target ) ) {
+    if (typeof target !== "object" && !IsFunction(target)) {
         target = {};
     }
 
     // Extend jQuery itself if only one argument is passed
-    if ( i === length ) {
+    if (i === length) {
         target = this;
         i--;
     }
 
-    for ( ; i < length; i++ ) {
+    for (; i < length; i++) {
         // Only deal with non-null/undefined values
-        if ( ( options = arguments[ i ] ) != null ) {
+        if ((options = arguments[i]) != null) {
             // Extend the base object
-            for ( name in options ) {
-                src = target[ name ];
-                copy = options[ name ];
+            for (name in options) {
+                src = target[name];
+                copy = options[name];
 
                 // Prevent never-ending loop
-                if ( target === copy ) {
+                if (target === copy) {
                     continue;
                 }
 
                 // Recurse if we're merging plain objects or arrays
-                if ( deep && copy && ( IsPlainObject( copy ) ||
-                    ( copyIsArray = Array.isArray( copy ) ) ) ) {
+                if (deep && copy && (IsPlainObject(copy) ||
+                    (copyIsArray = Array.isArray(copy)))) {
 
-                    if ( copyIsArray ) {
+                    if (copyIsArray) {
                         copyIsArray = false;
-                        clone = src && Array.isArray( src ) ? src : [];
+                        clone = src && Array.isArray(src) ? src : [];
 
                     } else {
-                        clone = src && IsPlainObject( src ) ? src : {};
+                        clone = src && IsPlainObject(src) ? src : {};
                     }
                     // Never move original objects, clone them
-                    target[ name ] = Extend( deep, clone, copy );
+                    target[name] = Extend(deep, clone, copy);
                 // Don't bring in undefined values
-                } else if ( copy !== undefined ) {
-                    target[ name ] = copy;
+                } else if (copy !== undefined) {
+                    target[name] = copy;
                 }
             }
         }
@@ -298,6 +294,26 @@ function ASSERT(condition, message) {
     if (!condition) {
         throw message || "Assertion failed";
     }
+}
+
+function ColourRatio(a, b, r) {
+    let ac = a.toColor();
+    let bc = b.toColor();
+
+    let ra = 1 - r;
+    let rb = r;
+
+    return TextColor.Indexed.fromRGB(
+        ra * ac.getRed()     + rb * bc.getRed(),
+        ra * ac.getGreen()   + rb * bc.getGreen(),
+        ra * ac.getBlue()    + rb * bc.getBlue()
+    );
+}
+
+function ColourRatioToBG(a, r) {
+    let tg = screen.newTextGraphics();
+    let bg = tg.getForegroundColor();
+    return ColourRatio(bg, a, r);
 }
 
 /*
@@ -315,6 +331,24 @@ let constants = Object.freeze({
 
     "CHARACTER_CREATURE": 1,
 
+    "BRAINEATER_CREATURE": 2,
+    //"SKELETAL_PIKEMAN_CREATURE": 2,
+    //"SKELETAL_ARCHER_CREATURE": 2,
+    //"WHIZZBOT_CREATURE": 2,
+    //"GREYGOO_CREATURE": 2,
+
+    "BRAINEATER_CREATURE_COST": 1,
+    //"SKELETAL_PIKEMAN_CREATURE": 2,
+    //"SKELETAL_ARCHER_CREATURE": 2,
+    //"WHIZZBOT_CREATURE": 2,
+    //"GREYGOO_CREATURE": 2,
+
+    "MAX_BRAINEATER_HP": 50,
+    //"SKELETAL_PIKEMAN_CREATURE": 2,
+    //"SKELETAL_ARCHER_CREATURE": 2,
+    //"WHIZZBOT_CREATURE": 2,
+    //"GREYGOO_CREATURE": 2,
+
     "FLOOR_TILE": 1,
     //"DOOR_TILE": 2,
     //"SECRET_DOOR_TILE": 3,
@@ -325,10 +359,11 @@ let constants = Object.freeze({
     "DOWN_STAIRS_TILE": 8,
 
     "MAX_PLAYER_HP": 1000,
-    "MAX_PLAYER_SP": 1000,
 
-    "LEVEL_X_DIM": 8,
-    "LEVEL_Y_DIM": 8,
+    "TURN_SP": 1000,
+
+    "LEVEL_X_DIM": 64,
+    "LEVEL_Y_DIM": 64,
 
     // Thank you ##latin @ freenode.net for helping translate this.
     "GAME_NAME": "Dominīs Temporis",
@@ -347,7 +382,11 @@ let constants = Object.freeze({
     "ACCEND_UPWARDS_ACTION": 11,
     "DECCEND_DOWNARDS_ACTION": 12,
 
-    "SP_REFILL_RATE": 0.2
+    "SP_REFILL_RATE": 0.2,
+    "SP_REFILL_RATE_AI": 1,
+
+    "CREATURE_POINTS": 10,
+    "CREATURE_POINTS_INFLATION": 1.07,
 });
 
 /*
@@ -399,7 +438,7 @@ crandom.NextInt = function(i) {
         r = this.replayingValues[0].r;
         this.replayingValues = this.replayingValues.slice(1);
     } else {
-        r = random.NextInt(i);
+        r = random.nextInt(i);
     }
 
     if (this.isRecording) {
@@ -433,9 +472,17 @@ let autoCommit = false;
 function Commit() {
     let pLoc = FindPlayerLocation(mapHead);
     ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
-    let c = mapHead.creatures[pLoc];
-    c.sp += constants.SP_REFILL_RATE * c.msp;
-    c.sp = Math.min(c.sp, c.msp);
+
+    for (let i = 0; i < mapHead.creatures.length; ++i) {
+        let c = mapHead.creatures[i];
+        if (c.type == constants.CHARACTER_CREATURE) {
+            c.sp += constants.SP_REFILL_RATE * constants.TURN_SP;
+            c.sp = Math.min(c.sp, constants.TURN_SP);
+        } else {
+            c.sp += constants.SP_REFILL_RATE_AI * constants.TURN_SP;
+            c.sp = Math.min(c.sp, constants.TURN_SP);
+        }
+    }
 
     turnSel = [];
     turnData = [{
@@ -460,47 +507,50 @@ function Replay(r) {
 
     let isPlayer = creature == pLoc;
 
-    if (nextTurnHead.played) {
-        crandom.StartReplaying(nextTurnHead.replay);
-    } else {
-        crandom.StartRecording();
+    if (isPlayer) {
+        if (nextTurnHead.played) {
+            crandom.StartReplaying(nextTurnHead.replay);
+        } else {
+            crandom.StartRecording();
+        }
     }
 
     let suc;
     let cost;
     let tirednessMatters = true;
+    let canDoPlayerFirstTime = true;
 
     switch (nextTurnHead.action) {
         case constants.MOVE_NORTH_ACTION:
-            suc = MoveCreature(mapHead, CordPair(0, -1), creature);
+            suc = MoveCreature(mapHead, CoordPair(0, -1), creature);
             cost = (AngleDir(constants.NORTH_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_NORTHEAST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(1, -1), creature);
+            suc = MoveCreature(mapHead, CoordPair(1, -1), creature);
             cost = (AngleDir(constants.NORTHEAST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_EAST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(1, 0), creature);
+            suc = MoveCreature(mapHead, CoordPair(1, 0), creature);
             cost = (AngleDir(constants.EAST_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_SOUTHEAST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(1, 1), creature);
+            suc = MoveCreature(mapHead, CoordPair(1, 1), creature);
             cost = (AngleDir(constants.SOUTHEAST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_SOUTH_ACTION:
-            suc = MoveCreature(mapHead, CordPair(0, 1), creature);
+            suc = MoveCreature(mapHead, CoordPair(0, 1), creature);
             cost = (AngleDir(constants.SOUTH_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_SOUTHWEST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(-1, 1), creature);
+            suc = MoveCreature(mapHead, CoordPair(-1, 1), creature);
             cost = (AngleDir(constants.SOUTHWEST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
         case constants.MOVE_WEST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(-1, 0), creature);
+            suc = MoveCreature(mapHead, CoordPair(-1, 0), creature);
             cost = (AngleDir(constants.WEST_DIR, dc.dir) * 0.1 + 1) * 100;
             break;
         case constants.MOVE_NORTHWEST_ACTION:
-            suc = MoveCreature(mapHead, CordPair(-1, -1), creature);
+            suc = MoveCreature(mapHead, CoordPair(-1, -1), creature);
             cost = (AngleDir(constants.NORTHWEST_DIR, dc.dir) * 0.1 + 1) * 100 * Math.sqrt(2);
             break;
 
@@ -516,26 +566,28 @@ function Replay(r) {
             break;
 
         case constants.WAIT_ACTION:
-            cost = 0;
+            cost = Number.MAX_SAFE_INTEGER;
             for (let i = 0; i < mapHead.creatures.length; ++i) {
                 cost = Math.min(mapHead.creatures[i].waitTime, cost);
             }
 
-            cost = Math.max(cost, 0);
+            cost = (Math.max(cost, dc.waitTime) - Math.min(cost, dc.waitTime)) / 2;
             suc = true;
             tirednessMatters = false;
+            canDoPlayerFirstTime = false;
             break;
 
         case constants.ACCEND_UPWARDS_ACTION:
             if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.UP_STAIRS_TILE) {
                 if (curLevel > 0) {
-                    --curLevel;
-                    SetupLevel(false);
+                    Commit();
                     if (nextTurnHead.played) {
                         crandom.StopReplaying();
                     } else {
                         crandom.StopRecording();
                     }
+                    --curLevel;
+                    SetupLevel(false);
                     Revert(true);
                     return true;
                 }
@@ -545,13 +597,14 @@ function Replay(r) {
             break;
         case constants.DECCEND_DOWNARDS_ACTION:
             if (mapHead.tiles[dc.x + dc.y * mapHead.dims.x].type == constants.DOWN_STAIRS_TILE) {
-                ++curLevel;
-                SetupLevel(true);
+                Commit();
                 if (nextTurnHead.played) {
                     crandom.StopReplaying();
                 } else {
                     crandom.StopRecording();
                 }
+                ++curLevel;
+                SetupLevel(true);
                 Revert(true);
                 return true;
             }
@@ -564,7 +617,7 @@ function Replay(r) {
     }
 
     if (tirednessMatters) {
-        cost *= dc.msp;
+        cost *= constants.TURN_SP;
         cost /= mapLevels[curLevel].creatures[creature].sp;
     }
 
@@ -630,15 +683,59 @@ function Replay(r) {
                 break;
         }
 
-        // Other creatures calculations
+        while (true) {
+            let minP = Number.MAX_SAFE_INTEGER;
+            let numC = 0;
+            for (let i = 0; i < mapHead.creatures.length; ++i) {
+                let c = mapHead.creatures[i];
+                if (c.type == constants.CHARACTER_CREATURE && !canDoPlayerFirstTime) {
+                    continue;
+                }
+
+                if (c.waitTime < minP) {
+                    minP = c.waitTime;
+                    numC = 1;
+                } else if (c.waitTime == minP) {
+                    ++numC;
+                }
+            }
+
+            ASSERT(numC != 0);
+            let cC = crandom.NextInt(numC) + 1;
+            let i;
+            for (i = 0; cC != 0; ++i) {
+                let c = mapHead.creatures[i];
+                if (c.type == constants.CHARACTER_CREATURE && !canDoPlayerFirstTime) {
+                    continue;
+                }
+
+                if (c.waitTime == minP) {
+                    --cC;
+                }
+            }
+
+            --i;
+
+            let c = mapHead.creatures[i];
+            if (c.type == constants.CHARACTER_CREATURE) {
+                ASSERT(canDoPlayerFirstTime);
+                break;
+            }
+
+            DispatchAI(i);
+
+            canDoPlayerFirstTime = true;
+        }
     } else {
 
     }
 
-    if (nextTurnHead.played) {
-        crandom.StopReplaying();
-    } else {
-        nextTurnHead.replay = crandom.StopRecording();
+    if (isPlayer) {
+        if (nextTurnHead.played) {
+            crandom.StopReplaying();
+        } else {
+            nextTurnHead.replay = crandom.StopRecording();
+        }
     }
 
     nextTurnHead.played = true;
@@ -722,6 +819,113 @@ function IssueCommand(cr, act) {
 
     if (!Replay(i)) {
         Rewind(1, true);
+    }
+}
+
+function AStar(map, start, end) {
+    function Dist(s, e) {
+        return Math.sqrt(
+            (Math.max(s.x, e.x) - Math.min(s.x, e.x))
+            * (Math.max(s.x, e.x) - Math.min(s.x, e.x))
+            + (Math.max(s.y, e.y) - Math.min(s.y, e.y))
+            * (Math.max(s.y, e.y) - Math.min(s.y, e.y))
+        );
+    }
+
+    function ReconstructPath(cameFrom, current) {
+        let ret = [current];
+        let c = current;
+        while (cameFrom.containsKey(c)) {
+            c = cameFrom.get(c);
+            ret[ret.length] = c;
+        }
+
+        return ret.reverse();
+    }
+
+    let closedSet = [];
+    let openSet = [start];
+    let cameFrom = new Map();
+    let gScore = new Map();
+    let fScore = new Map();
+
+    gScore.put(start, 0);
+    fScore.put(start, Dist(start, end));
+
+    while (openSet.length != 0) {
+        let current = openSet[0];
+        let currentI = 0;
+        for (let i = 1; i < openSet.length; ++i) {
+            if (fScore.get(openSet[i]) < fScore.get(current)) {
+                current = openSet[i];
+                currentI = i;
+            }
+        }
+
+        if (current == end) {
+            return ReconstructPath(cameFrom, current);
+        }
+
+        openSet.splice(currentI, 1);
+        closedSet[closedSet.length] = current;
+
+        for (let x = -1; x <= 1; ++x) {
+            outer: for (let y = -1; y <= 1; ++y) {
+                if (x == current.x && y == current.y) {
+                    continue;
+                }
+
+                if (!CanMoveCreature(map, CoordPair(x, y), current, true)) {
+                    continue;
+                }
+
+                let n = CoordPair(x + current.x, y + current.y);
+                for (let i = 0; i < closedSet.length; ++i) {
+                    if (closedSet[i].x == n.x && closedSet[i].y == n.y) {
+                        continue outer;
+                    }
+                }
+
+                let possibleGScore = gScore.get(current) + Dist(current, n);
+                let found = false;
+                for (let i = 0; i < openSet.length; ++i) {
+                    if (openSet[i].x == n.x && openSet[i].y == n.y) {
+                        found = true;
+                        if (possibleGScore >= gScore.get(n)) {
+                            continue outer;
+                        }
+                    }
+                }
+
+                if (!found) {
+                    openSet[openSet.length] = n;
+                }
+
+                cameFrom.put(n, current);
+                gScore.put(n, possibleGScore);
+                fScore.put(n, gScore.get(n) + Dist(n, end));
+            }
+        }
+    }
+}
+
+function DispatchAI(i) {
+    let c = mapHead.creatures[i];
+    ASSERT(c.type != constants.CHARACTER_CREATURE);
+
+    let pLoc = FindPlayerLocation(mapHead);
+    ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
+    let p = mapHead.creatures[pLoc];
+
+    if (c.type == constants.BRAINEATER_CREATURE) {
+        let path = AStar(mapHead, CoordPair(c.x, c.y), CoordPair(p.x, p.y));
+        let dir = GetDir(path[0], path[1]);
+
+        if (dir == c.dir) {
+            IssueCommand(i, DirToMoveCmd(dir));
+        } else {
+            IssueCommand(i, DirToRotate(c.dir, dir));
+        }
     }
 }
 
@@ -966,8 +1170,8 @@ function FOV(map, x1, y1, r, dir) {
     }
 
     function VisitCoord(x1, y1, x, y, dx, dy, viewIndex, activeViews) {
-        let topLeft = CordPair(x, y + 1);
-        let bottomRight = CordPair(x + 1, y);
+        let topLeft = CoordPair(x, y + 1);
+        let bottomRight = CoordPair(x + 1, y);
 
         while (
             viewIndex.m < activeViews.length
@@ -1201,17 +1405,17 @@ try {
     // Thanks, http://roguebasin.roguelikedevelopment.org/index.php?title=Cellular_Automata_Method_for_Generating_Random_Cave-Like_Levels
     function MakeTileGrid(x, y) {
         let offsets1 = [
-            CordPair(-1, -1), CordPair( 0, -1), CordPair(+1, -1),
-            CordPair(-1,  0), CordPair( 0,  0), CordPair(+1,  0),
-            CordPair(-1, +1), CordPair( 0, +1), CordPair(+1, +1)
+            CoordPair(-1, -1), CoordPair( 0, -1), CoordPair(+1, -1),
+            CoordPair(-1,  0), CoordPair( 0,  0), CoordPair(+1,  0),
+            CoordPair(-1, +1), CoordPair( 0, +1), CoordPair(+1, +1)
         ];
 
         let offsets2 = [
-            CordPair(-2, -2), CordPair(-1, -2), CordPair( 0, -2), CordPair(+1, -2), CordPair(+2, -2),
-            CordPair(-2, -1),                                                       CordPair(+2, -1),
-            CordPair(-2,  0),                                                       CordPair(+2,  0),
-            CordPair(-2, +1),                                                       CordPair(+2, +1),
-            CordPair(-2, +2), CordPair(-1, +2), CordPair( 0, +2), CordPair(+1, +2), CordPair(+2, +2)
+            CoordPair(-2, -2), CoordPair(-1, -2), CoordPair( 0, -2), CoordPair(+1, -2), CoordPair(+2, -2),
+            CoordPair(-2, -1),                                                          CoordPair(+2, -1),
+            CoordPair(-2,  0),                                                          CoordPair(+2,  0),
+            CoordPair(-2, +1),                                                          CoordPair(+2, +1),
+            CoordPair(-2, +2), CoordPair(-1, +2), CoordPair( 0, +2), CoordPair(+1, +2), CoordPair(+2, +2)
         ];
 
         while (true) {
@@ -1221,15 +1425,14 @@ try {
                     let t = cx + cy * x;
                     let dirt = random.nextInt(100) < 40;
                     if (dirt) {
-                        //tiles[t] = true;
-                        tiles[t] = false;
+                        tiles[t] = true;
                     } else {
                         tiles[t] = false;
                     }
                 }
             }
 
-            /*for (let i = 0; i < 7; ++i) {
+            for (let i = 0; i < 7; ++i) {
                 let prvTiles = tiles;
                 tiles = new Array(x * y);
 
@@ -1302,13 +1505,7 @@ try {
                         }
                     }
                 }
-            }*/
-
-            tiles[2 + 1 * x] = true;
-
-            tiles[5 + 5 * x] = true;
-            tiles[7 + 5 * x] = true;
-            tiles[7 + 6 * x] = true;
+            }
 
             let rTile = random.nextInt(tiles.length);
             while (tiles[rTile]) {
@@ -1366,8 +1563,46 @@ try {
         }
     }
 
+    function NewBrainEater(x, y) {
+        return {
+            "type": constants.BRAINEATER_CREATURE,
+            "x": x,
+            "y": y,
+            "dir": constants.NORTH_DIR,
+            "hp": constants.MAX_BRAINEATER_HP,
+            "sp": constants.TURN_SP,
+            "mhp": constants.MAX_BRAINEATER_HP,
+            "waitTime": 0,
+        };
+    }
+
     function SpawnCreatures(tiles) {
-        return [];
+        let ret = [];
+        let points = Math.floor(constants.CREATURE_POINTS * Math.pow(constants.CREATURE_POINTS_INFLATION, curLevel));
+
+        let mPoints = Math.min(
+            0,
+            constants.BRAINEATER_CREATURE_COST
+        );
+
+        while (points >= mPoints) {
+            let rTile = random.nextInt(tiles.length);
+            while (!tiles[rTile].canWalk) {
+                rTile = random.nextInt(tiles.length);
+            }
+
+            let c = random.nextInt(1);
+
+            if (c == 0) {
+                ret[ret.length] = NewBrainEater(
+                    rTile % constants.LEVEL_X_DIM,
+                    Math.floor(rTile / constants.LEVEL_X_DIM)
+                );
+                points -= constants.BRAINEATER_CREATURE_COST;
+            }
+        }
+
+        return ret;
     }
 
     function SetupLevel(down) {
@@ -1375,12 +1610,18 @@ try {
             let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
             let creatures = SpawnCreatures(tiles);
 
+            let seenTiles = new Array(tiles.length);
+            for (let i = 0; i < tiles.length; ++i) {
+                seenTiles[i] = false;
+            }
+
             mapLevels[curLevel] = {
                 "tiles": tiles,
                 "creatures": creatures,
                 "items": [],
-                "dims": CordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
+                "dims": CoordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
                 "log": [],
+                "seenTiles": seenTiles
             };
         }
 
@@ -1401,9 +1642,8 @@ try {
                 "y": Math.floor(u / constants.LEVEL_X_DIM),
                 "dir": constants.NORTH_DIR,
                 "hp": constants.MAX_PLAYER_HP,
-                "sp": constants.MAX_PLAYER_SP,
+                "sp": constants.TURN_SP,
                 "mhp": constants.MAX_PLAYER_HP,
-                "msp": constants.MAX_PLAYER_SP,
                 "waitTime": 0,
             };
         } else if (down) {
@@ -1434,7 +1674,7 @@ try {
             lf.CommitToLog();
             lf.SetTxt("Accend only with a head on a plate,");
             lf.CommitToLog();
-            lf.SetTxt("Yours or the monster's, when either combust,");
+            lf.SetTxt("Either yours or the monster's, held in glove,");
             lf.CommitToLog();
             lf.SetTxt("Lest they take into their own hands your fate.");
             lf.CommitToLog();
@@ -1458,6 +1698,10 @@ try {
     }
 
     function DrawBar(name, val, max, x, y, len, brightness) {
+        if (brightness == 0) {
+            return;
+        }
+
         let tg = screen.newTextGraphics();
 
         tg.putString(new TerminalPosition(x + len - name.length + 1, y), name)
@@ -1470,20 +1714,20 @@ try {
         if (percStat <= 0) {
             return;
         } else if (percStat < 0.10) {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 0, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
             tg.enableModifiers([SGR.BLINK, SGR.BOLD, SGR.REVERSE]);
         } else if (percStat < 0.20) {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 0, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
             tg.enableModifiers([SGR.BLINK, SGR.BOLD]);
         } else if (percStat < 0.30) {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 0, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
             tg.enableModifiers([SGR.BLINK]);
         } else if (percStat < 0.40) {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 0, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
         } else if (percStat < 0.80) {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 255 * brightness, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 0), brightness));
         } else {
-            tg.setForegroundColor(TextColor.Indexed.fromRGB(0, 255 * brightness, 0));
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(0, 255, 0), brightness));
         }
 
         tg.drawLine(
@@ -1505,42 +1749,103 @@ try {
             : Math.max(a, b) - Math.min(a, b);
     }
 
+    function DirToMoveCmd(dir) {
+        switch (dir) {
+            case constants.NORTH_DIR:
+                return constansts.MOVE_NORTH_ACTION;
+            case constants.NORTHEAST_DIR:
+                return constansts.MOVE_NORTHEAST_ACTION;
+            case constants.EAST_DIR:
+                return constansts.MOVE_EAST_ACTION;
+            case constants.SOUTHEAST_DIR:
+                return constansts.MOVE_SOUTHEAST_ACTION;
+            case constants.SOUTH_DIR:
+                return constansts.MOVE_SOUTH_ACTION;
+            case constants.SOUTHWEST_DIR:
+                return constansts.MOVE_SOUTHWEST_ACTION;
+            case constants.WEST_DIR:
+                return constansts.MOVE_WEST_ACTION;
+            case constants.NORTHWEST_DIR:
+                return constansts.MOVE_NORTHWEST_ACTION;
+        }
+    }
+
+    function DirToRotate(s, t) {
+        // FIXME: be efficient
+        return constants.ROTATE_CLOCKWISE_ACTION;
+    }
+
+    function GetDir(a, b) {
+        if (a.x > b.x) {
+            if (a.y > b.y) {
+                return constants.NORTHWEST_DIR;
+            } else if (a.y < b.y) {
+                return constants.SOUTHWEST_DIR;
+            } else {
+                return constants.WEST_DIR;
+            }
+        } else if (a.x < b.x) {
+            if (a.y > b.y) {
+                return constants.NORTHEAST_DIR;
+            } else if (a.y < b.y) {
+                return constants.SOUTHEAST_DIR;
+            } else {
+                return constants.EAST_DIR;
+            }
+        } else {
+            if (a.y > b.y) {
+                return constants.SOUTH_DIR;
+            } else if (a.y < b.y) {
+                return constants.NORTH_DIR;
+            }
+        }
+
+        ASSERT(false);
+    }
+
     /*
-     * Precondition: offset.x <= 1 && offset.y <= 1
+     * Precondition: |offset.x| <= 1 && |offset.y| <= 1
      */
-    function CanMoveCreature(map, offset, creature) {
-        let c = map.creatures[creature];
-        let x = c.x + offset.x;
-        let y = c.y + offset.y;
+    function CanMoveCreature(map, offset, coords, overlap) {
+        let x = coords.x + offset.x;
+        let y = coords.y + offset.y;
 
         let tile = x + y * map.dims.x;
+
+        if (!map.tiles[tile].canWalk) {
+            return false;
+        }
 
         // Diagonals are special.
         if (
             Math.abs(offset.x) == 1 && Math.abs(offset.y) == 1
             && !(
-                CanMoveCreature(map, CordPair(offset.x, 0), creature)
-                || CanMoveCreature(map, CordPair(0, offset.y), creature)
+                CanMoveCreature(map, CoordPair(offset.x, 0), coords, false)
+                || CanMoveCreature(map, CoordPair(0, offset.y), coords, false)
             )
         ) {
             return false;
         }
 
-        if (map.tiles[tile].canWalk) {
-            return true;
+        if (overlap) {
+            let i;
+            for (i = 0; i < map.creatures.length && (map.creatures[i].x != x || map.creatures[i].y != y); ++i) {}
+            if (i != map.creatures.length) {
+                return false;
+            }
         }
 
-        return false;
+        return true;
     }
 
     function MoveCreature(map, offset, creature) {
-        if (!CanMoveCreature(map, offset, creature)) {
-            return false;
-        }
-
         let c = map.creatures[creature];
         let x = c.x + offset.x;
         let y = c.y + offset.y;
+
+        if (!CanMoveCreature(map, offset, CoordPair(c.x, c.y), true)) {
+            return false;
+        }
 
         c.x = x;
         c.y = y;
@@ -1549,8 +1854,12 @@ try {
     }
 
     function DrawDirectionWheel(x, y, dir, brightness) {
+        if (brightness == 0) {
+            return;
+        }
+
         let tg = screen.newTextGraphics();
-        tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 255 * brightness, 255 * brightness));
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
         tg.setCharacter(new TerminalPosition(x, y), 'O');
 
         switch (dir) {
@@ -1649,7 +1958,6 @@ try {
                     tg.SetBacgroundColor(mapHead.log[i].bgs[l].bg);
                 }
 
-                stderr.printf("Gn print out %f %f %s\n", m, i, mapHead.log[i].txt[m]);
                 tg.setCharacter(
                     new TerminalPosition(
                         termSize.getColumns() * 2 / 3 + charsSoFar,
@@ -1690,23 +1998,42 @@ try {
     }
 
     function DrawCreature(map, xO, yO, c, brightness) {
+        if (brightness == 0) {
+            return;
+        }
+
         let tg = screen.newTextGraphics();
-        tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 255 * brightness, 255 * brightness));
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
         if (c.type == constants.CHARACTER_CREATURE) {
             tg.setCharacter(
                 new TerminalPosition(1 + xO, 1 + yO),
                 Symbols.FACE_WHITE
             );
+        } else if (c.type == constants.BRAINEATER_CREATURE) {
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                'b'
+            );
         }
     }
 
     function DrawItem(map, xO, yO, t, brightness) {
+        if (brightness == 0) {
+            return;
+        }
+
         let tg = screen.newTextGraphics();
-        tg.setForegroundColor(TextColor.Indexed.fromRGB(255 * brightness, 255 * brightness, 255 * brightness));
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
     }
 
-    function DrawTile(map, xO, yO, x, y) {
+    function DrawTile(map, xO, yO, x, y, brightness) {
+        if (brightness == 0) {
+            return;
+        }
+
         let tg = screen.newTextGraphics();
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
+
         let t = x + y * map.dims.x;
         switch (map.tiles[t].type) {
             case constants.EMPTY_TILE:
@@ -1772,21 +2099,21 @@ try {
                 );
                 break;
             case constants.FLOOR_TILE:
-                tg.setForegroundColor(TextColor.Indexed.fromRGB(80, 80, 80));
+                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(160, 160, 160), brightness));
                 tg.setCharacter(
                     new TerminalPosition(1 + xO, 1 + yO),
                     map.tiles[t].rchar
                 );
                 break;
             case constants.UP_STAIRS_TILE:
-                tg.setForegroundColor(TextColor.Indexed.fromRGB(255, 100, 100));
+                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
                 tg.setCharacter(
                     new TerminalPosition(1 + xO, 1 + yO),
                     "<"
                 );
                 break;
             case constants.DOWN_STAIRS_TILE:
-                tg.setForegroundColor(TextColor.Indexed.fromRGB(255, 100, 100));
+                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
                 tg.setCharacter(
                     new TerminalPosition(1 + xO, 1 + yO),
                     ">"
@@ -1819,18 +2146,24 @@ try {
             mapHead.creatures[pLoc].dir
         );
 
+        for (let i = 0; i < fov.length; ++i) {
+            if (fov[i]) {
+                mapLevels[curLevel].seenTiles[i] = true;
+            }
+        }
+
         let map = mapLevels[curLevel];
         for (let yO = 0; yO < width; ++yO) {
             for (let xO = 0; xO < length; ++xO) {
                 let x = startX + xO;
                 let y = startY + yO;
+                let t = x + y * mapHead.dims.x;
 
                 if (
                     x >= 0
                     && x < mapHead.dims.x
                     && y >= 0
                     && y < mapHead.dims.y
-                    && fov[x + y * mapHead.dims.x]
                 ) {
                     // Draw Order:
                     // 1. Creatures
@@ -1843,18 +2176,18 @@ try {
                     let is = FindItemsOnTile(mapHead, x, y);
                     let pis = FindItemsOnTile(map, x, y);
 
-                    let t = x + y * mapHead.dims.x;
+                    let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 0);
 
                     if (mapDrawLevels[t] < cs.length) {
-                        DrawCreature(mapHead, xO, yO, cs[mapDrawLevels[t]], 1);
+                        DrawCreature(mapHead, xO, yO, cs[mapDrawLevels[t]], brightnessMultiplier);
                     } else if (mapDrawLevels[t] < (cs.length + pcs.length)) {
-                        DrawCreature(map, xO, yO, pcs[mapDrawLevels[t] - cs.length], 0.5);
+                        DrawCreature(map, xO, yO, pcs[mapDrawLevels[t] - cs.length], brightnessMultiplier * 0.5);
                     } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length)) {
-                        DrawItem(mapHead, xO, yO, is[mapDrawLevels[t] - cs.length - psc.length], 1);
+                        DrawItem(mapHead, xO, yO, is[mapDrawLevels[t] - cs.length - psc.length], brightnessMultiplier);
                     } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length + pis.length)) {
-                        DrawItem(map, xO, yO, pis[mapDrawLevels[t] - cs.length - psc.length - is.length], 0.5);
+                        DrawItem(map, xO, yO, pis[mapDrawLevels[t] - cs.length - psc.length - is.length], brightnessMultiplier * 0.5);
                     } else {
-                        DrawTile(mapHead, xO, yO, x, y);
+                        DrawTile(mapHead, xO, yO, x, y, brightnessMultiplier);
                     }
 
                     ++mapDrawLevels[t];
@@ -1972,7 +2305,7 @@ try {
         DrawBar(
             "SP",
             map.creatures[pLoc].sp,
-            constants.MAX_PLAYER_SP,
+            constants.TURN_SP,
             termSize.getColumns() / 3 * 2 + 1,
             2,
             termSize.getColumns() / 3 - 4,
@@ -2002,7 +2335,7 @@ try {
         DrawBar(
             "SP",
             mapHead.creatures[pLoc].sp,
-            constants.MAX_PLAYER_SP,
+            constants.TURN_SP,
             termSize.getColumns() / 3 * 2 + 1,
             2,
             termSize.getColumns() / 3 - 4,
@@ -2099,7 +2432,7 @@ try {
         while (
             thisInput.getKeyType() != KeyType.Enter
             && autoCommit && oldAC == autoCommit
-            && (pc.msp - pc.sp) > pc.msp * constants.SP_REFILL_RATE
+            && (constants.TURN_SP - pc.sp) > constants.TURN_SP * constants.SP_REFILL_RATE
         ) {
             RewindToLastChoice();
             Commit();
@@ -2167,14 +2500,6 @@ try {
     screen.stopScreen();
 
 } catch (err) {
-    // This try-catch is not ideal, as we loose the line on which the error
-    // occurred, however me must do this, because if we don't, Rhino JS will
-    // print the error while the terminal is in private mode and then that
-    // error will be cleared from the screen when it auto-exits from private
-    // mode. A vauge error is better than no error, I guess.
-    //
-    // So first we close the screen so that we exit from private mode, then
-    // we print out the caught exception.
     screen.stopScreen();
     Thread.sleep(200);
     stdout.printf("\nFATAL ERROR: %s\n", err.toString());
