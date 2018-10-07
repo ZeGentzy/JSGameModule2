@@ -3,7 +3,14 @@
 // Program Name:
 //////////////////////////////////////////////////////////////////////////
 
-// Oh how beloved is my javascript,
+// PROLOGUE
+//
+// Oh wondrous Muses, I call 'pon your aid,
+// help me 'pon this crusade to dissuade
+// people who consider javascript wise,
+// opinions which them folks must now revise.
+//
+// Oh, how beloved is my javascript,
 // where obj plus array is a valid script,
 // where the errors are far and few between,
 // yet where randomness is constantly seen.
@@ -13,38 +20,38 @@
 // Stacktraces, or performance? Pick one.
 // Actually, you will only get none.
 //
-// Want errors when accessing non-members?
-// Instead we'll put your results ina blender.
-// Ask, what does the `splice` of `undefined` do?
-// Removes the first element, who woulda knew!
+// Welcome to the land of the boll weevil!
+// Where IDE's, provided, are medieval!
+// Tumble those dieing hands 'cross a keyboard.
+// Wait for it to un-freeze, makin' me be bored.
 //
-// Want to make a clone of a variable?
-// I'm afraid we weren't that charitable.
-// Anywho, why do what you wanna go do?
-// Do you think we thought any of this through?
+// Great is havin' t'wait for many minutes.
+// If only the comps haven't some rickets,
+// you might, just might, get something done, tonight.
+// instead of doing things at home! At night!
+//
+// Come wittness the slowest autocomplete,
+// Which fails with lines most basic to complete,
+// it's so bad that it must've been a feat,
+// to make something so quickly obsolete.
+//
+// Want? Errors when accessing non-members?
+// Instead we'll put your results ina blender.
+// Ask! What does the `splice` of `undefined` do?
+// Removes the first element, who woulda knew!
 //
 // Do your numbers not have the member `m`?
 // Well, to find, that bug's gonna be a gem.
 // Do you want something that isn't a float?
-// Well, you settle instead with `Math` `floor` quotes.
+// You must settle instead with `Math` `floor` quotes.
 //
 // So you want any constant vars today?
 // Just make do with `object` `freeze`, okay?
 // Did you access any constant not there?
 // We *might* just give you a warning, we swear.
 //
-// Do you want a half decent debugger?
-// How 'bout this terrible little fucker?
-// It'll tell the line your exceptions lay 'pon,
-// If you tick some random fuckin' box on!
-//
-// You want a font bigger than point six?
-// Hey now, t'oesn't even have the basics,
-// with it's UI made out of duck' 'n' glue,
-// an' a carefully chosen white-on-blue.
-//
 // Fly to where you can access vars not passed,
-// and watch where your sanity gets blast'd!
+// and watch where your sanity gets a blast!
 // Java calls might hand out errors, deadly,
 // or calls might just work, by luck, correctly.
 //
@@ -52,6 +59,51 @@
 // when pass'd to Java libs, unless one prays.
 // The shitty land that I'm forced to endure,
 // for all my modules, including numb' two.
+//
+// Want to make a clone of a variable?
+// I'm afraid we weren't that charitable.
+// Anywho, why do what you wanna go do?
+// Do you think we thought any of this through?
+//
+// Do you want a half decent debugger?
+// How 'bout this terrible little fucker?
+// It'll tell the line your exceptions lay 'pon,
+// if you tick some random fuckin' box on!
+//
+// You want a font bigger than point six?
+// Hey now, t'oesn't even have the basics,
+// with it's UI made out of duck' 'n' glue,
+// an' a carefully chosen white-on-blue,
+//
+// emanating a wierd VBA vibe,
+// in looking like what '08 would provide.
+// If only I could say that it's aged well,
+// but instead it makes my eyes hurt and swell.
+//
+// See them hum, my most beloved orioles,
+// watch them dance, to the bright borealis,
+// tap a dance, jumpin' on your computer,
+// fill with rage, yet it's only October.
+//
+// Crack open a 'bugger, that's not handy,
+// drink down your imaginary brandy,
+// for today is a long day, as they say,
+// When it hands error B, instead of A.
+//
+// Today, you chug down bottles of Kava!
+// Trying, to pass those objects to Java!
+// Watch them fail, to distinguish between them!
+// Take your anger in a bottle'n vent 'em!
+//
+// Stand on the lines which only waxe and wane.
+// Wave 'round your hand, and practice the arcane.
+// Come on! Proclaim eternal victory!
+// Claim mastery, over the unwordly!
+//
+// Over the language which wobbles and rolls,
+// Whose weak foundation is crattered with holes,
+// Which on your sanity takes it's slow toll.
+// As you suffer from the stories told.
 
 // java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
@@ -72,7 +124,7 @@
 // [ ] FOV edge cases fixes. (Non visible walls, visible diagonals)
 // [ ] Light and visibility
 // [ ] Sound
-// [ ] AI & Monsters, revisited
+// [ ] AI & Monsters & Combat, revisited
 // [ ] Player Inventory
 // [ ] Stats
 // [ ] Items
@@ -90,7 +142,6 @@ let stdin = new java.io.BufferedReader(new java.io.InputStreamReader(java.lang.S
 let stderr = java.lang.System.err;
 let Thread = java.lang.Thread;
 let Random = java.util.Random;
-let Map = java.util.HashMap;
 
 let TextColor = com.googlecode.lanterna.TextColor;
 let SGR = com.googlecode.lanterna.SGR;
@@ -211,6 +262,19 @@ function CoordPair(x, y) {
         "x": x,
         "y": y,
     };
+}
+
+function InRange(a, b, r) {
+    if (
+        a.x - r <= b.x
+        && a.x + r >= b.x
+        && a.y - r <= b.y
+        && a.y + r >= b.y
+    ) { 
+        return true;
+    }
+
+    return false;
 }
 
 /*
@@ -675,6 +739,12 @@ function Replay(r) {
         suc = false;
     }
 
+    ASSERT(isPlayer || suc, "AI should never fail.");
+
+    nextTurnHead.played = true;
+    turnHead = nextTurnHead;
+    turnSel[turnSel.length] = r;
+
     if (!suc) {
         if (nextTurnHead.played) {
             crandom.StopReplaying();
@@ -682,14 +752,8 @@ function Replay(r) {
             nextTurnHead.replay = crandom.StopRecording();
         }
 
-        nextTurnHead.played = true;
-        turnHead = nextTurnHead;
-        turnSel[turnSel.length] = r;
-
         return false;
     }
-
-    ASSERT(isPlayer || suc, "AI should never fail.");
 
     for (let i = 0; i < mapHead.creatures.length; ++i) {
         mapHead.creatures[i].waitTime -= cost;
@@ -734,6 +798,7 @@ function Replay(r) {
         }
 
         while (true) {
+            stderr.printf("Dispatching AI\n");
             let minP = Number.MAX_SAFE_INTEGER;
             let numC = 0;
             for (let i = 0; i < mapHead.creatures.length; ++i) {
@@ -787,10 +852,6 @@ function Replay(r) {
             nextTurnHead.replay = crandom.StopRecording();
         }
     }
-
-    nextTurnHead.played = true;
-    turnHead = nextTurnHead;
-    turnSel[turnSel.length] = r;
 
     return true;
 }
@@ -853,7 +914,7 @@ function RewindToLastChoice() {
 function IssueCommand(cr, act) {
     let i;
     for (i = 0; i < turnHead.next.length; ++i) {
-        if (turnHead.next[i].action == act) {
+        if (turnHead.next[i].action == act && turnHead.next[i].creature == cr) {
             ASSERT(Replay(i), "Pre issued commands should be valid.");
             return;
         }
@@ -872,6 +933,42 @@ function IssueCommand(cr, act) {
     }
 }
 
+// Thanks, https://gist.github.com/nzakas/9959066
+function SimpleCMap(c2) {  
+    this._data = {};
+    this._c2 = c2;
+}
+
+SimpleCMap.prototype = {
+    get: function(key) {
+        let k = key.x + key.y * constants.LEVEL_X_DIM;
+        if (this.has(key)) {
+            let d = this._data['@' + k];
+            if (this._c2) {
+                return CoordPair(
+                    d % constants.LEVEL_X_DIM,
+                    Math.floor(d / constants.LEVEL_X_DIM)
+                );
+            } else {
+                return d;
+            }
+        } else {
+            return void 0;
+        }
+    },
+
+    has: function(key) {
+        let k = key.x + key.y * constants.LEVEL_X_DIM;
+        return this.hasOwnProperty.call(this._data, '@' + k);
+    },
+
+    set: function(key, value) {
+        let k = key.x + key.y * constants.LEVEL_X_DIM;
+        let v = this._c2 ? value.x + value.y * constants.LEVEL_X_DIM : value;
+        this._data['@' + k] = v;
+    }
+};
+
 function AStar(map, start, end) {
     function Dist(s, e) {
         return Math.sqrt(
@@ -885,23 +982,24 @@ function AStar(map, start, end) {
     function ReconstructPath(cameFrom, current) {
         let ret = [current];
         let c = current;
-        while (cameFrom.containsKey(c)) {
+        while (cameFrom.has(c)) {
             c = cameFrom.get(c);
             ret[ret.length] = c;
         }
 
-        return ret.reverse();
+        ret.reverse();
+        return ret;
     }
 
     let closedSet = [];
     let openSet = [start];
-    let cameFrom = new Map();
-    let gScore = new Map();
-    let fScore = new Map();
+    let cameFrom = new SimpleCMap(true);
+    let gScore = new SimpleCMap(false);
+    let fScore = new SimpleCMap(false);
 
-    gScore.put(start, 0);
-    fScore.put(start, Dist(start, end));
-
+    gScore.set(start, 0);
+    fScore.set(start, Dist(start, end));
+    
     while (openSet.length != 0) {
         let current = openSet[0];
         let currentI = 0;
@@ -912,7 +1010,7 @@ function AStar(map, start, end) {
             }
         }
 
-        if (current == end) {
+        if (current.x == end.x && current.y == end.y) {
             return ReconstructPath(cameFrom, current);
         }
 
@@ -921,15 +1019,16 @@ function AStar(map, start, end) {
 
         for (let x = -1; x <= 1; ++x) {
             outer: for (let y = -1; y <= 1; ++y) {
-                if (x == current.x && y == current.y) {
-                    continue;
-                }
-
-                if (!CanMoveCreature(map, CoordPair(x, y), current, true)) {
-                    continue;
+                if (x == 0 && y == 0) {
+                    continue outer;
                 }
 
                 let n = CoordPair(x + current.x, y + current.y);
+
+                if ((n.x != end.x || n.y != end.y) && !CanMoveCreature(map, CoordPair(x, y), current, true)) {
+                    continue outer;
+                }
+
                 for (let i = 0; i < closedSet.length; ++i) {
                     if (closedSet[i].x == n.x && closedSet[i].y == n.y) {
                         continue outer;
@@ -938,28 +1037,31 @@ function AStar(map, start, end) {
 
                 let possibleGScore = gScore.get(current) + Dist(current, n);
                 let found = false;
-                for (let i = 0; i < openSet.length; ++i) {
+                f: for (let i = 0; i < openSet.length; ++i) {
                     if (openSet[i].x == n.x && openSet[i].y == n.y) {
                         found = true;
-                        if (possibleGScore >= gScore.get(n)) {
-                            continue outer;
-                        }
+                        break f;
                     }
                 }
 
                 if (!found) {
                     openSet[openSet.length] = n;
+                } else if (gScore.has(n) && possibleGScore >= gScore.get(n)) {
+                    continue outer;
                 }
 
-                cameFrom.put(n, current);
-                gScore.put(n, possibleGScore);
-                fScore.put(n, gScore.get(n) + Dist(n, end));
+                cameFrom.set(n, current);
+                gScore.set(n, possibleGScore);
+                fScore.set(n, gScore.get(n) + Dist(n, end));
             }
         }
     }
+
+    ASSERT(false, "Path not found.");
 }
 
 function DispatchAI(i) {
+    stderr.printf("Dispatched AI for %f\n", i);
     let c = mapHead.creatures[i];
     ASSERT(c.type != constants.CHARACTER_CREATURE);
 
@@ -968,15 +1070,24 @@ function DispatchAI(i) {
     let p = mapHead.creatures[pLoc];
 
     if (c.type == constants.BRAINEATER_CREATURE) {
-        let path = AStar(mapHead, CoordPair(c.x, c.y), CoordPair(p.x, p.y));
-        let dir = GetDir(path[0], path[1]);
+        let a = CoordPair(c.x, c.y);
+        let b = CoordPair(p.x, p.y);
+        if (!InRange(a, b, 1)) {
+            stderr.printf("Finding path for %f\n", i);
+            let path = AStar(mapHead, a, b);
+            stderr.printf("Found path for %f\n", i);
+            let dir = GetDir(path[0], path[1]);
 
-        if (dir == c.dir) {
-            IssueCommand(i, DirToMoveCmd(dir));
+            if (dir == c.dir) {
+                IssueCommand(i, DirToMoveCmd(dir));
+            } else {
+                IssueCommand(i, DirToRotate(c.dir, dir));
+            }
         } else {
-            IssueCommand(i, DirToRotate(c.dir, dir));
+            IssueCommand(i, constants.WAIT_ACTION);
         }
     }
+    stderr.printf("Dispatched AI for %f END\n", i);
 }
 
 function NewLogFactory() {
@@ -1625,6 +1736,31 @@ try {
             "waitTime": 0,
         };
     }
+    
+    function HasCreature(cs, t) {
+        let x = t % constants.LEVEL_X_DIM;
+        let y = Math.floor(t / constants.LEVEL_X_DIM);
+        for (let i = 0; i < cs.length; ++i) {
+            if (x == cs[i].x && y == cs[i].y) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    function GetCreatures(cs, t) {
+        let ret = [];
+        let x = t % constants.LEVEL_X_DIM;
+        let y = Math.floor(t / constants.LEVEL_X_DIM);
+        for (let i = 0; i < cs.length; ++i) {
+            if (x == cs[i].x && y == cs[i].y) {
+                ret[ret.length] = i;
+            }
+        }t
+        
+        return ret;
+    }
 
     function SpawnCreatures(tiles) {
         let ret = [];
@@ -1637,7 +1773,7 @@ try {
 
         while (points >= mPoints) {
             let rTile = random.nextInt(tiles.length);
-            while (!tiles[rTile].canWalk) {
+            while (!tiles[rTile].canWalk || HasCreature(ret, rTile)) {
                 rTile = random.nextInt(tiles.length);
             }
 
@@ -1683,6 +1819,11 @@ try {
             ) {
                 break;
             }
+        }
+                    
+        let rmCs = GetCreatures(mapLevels[curLevel].creatures, u);
+        for (let i = 0; i < rmCs.length; ++i) {
+            mapLevels[curLevel].creatures.splice(rmCs[i], 1)
         }
 
         if (curLevel == 0 && down) {
@@ -1802,21 +1943,21 @@ try {
     function DirToMoveCmd(dir) {
         switch (dir) {
             case constants.NORTH_DIR:
-                return constansts.MOVE_NORTH_ACTION;
+                return constants.MOVE_NORTH_ACTION;
             case constants.NORTHEAST_DIR:
-                return constansts.MOVE_NORTHEAST_ACTION;
+                return constants.MOVE_NORTHEAST_ACTION;
             case constants.EAST_DIR:
-                return constansts.MOVE_EAST_ACTION;
+                return constants.MOVE_EAST_ACTION;
             case constants.SOUTHEAST_DIR:
-                return constansts.MOVE_SOUTHEAST_ACTION;
+                return constants.MOVE_SOUTHEAST_ACTION;
             case constants.SOUTH_DIR:
-                return constansts.MOVE_SOUTH_ACTION;
+                return constants.MOVE_SOUTH_ACTION;
             case constants.SOUTHWEST_DIR:
-                return constansts.MOVE_SOUTHWEST_ACTION;
+                return constants.MOVE_SOUTHWEST_ACTION;
             case constants.WEST_DIR:
-                return constansts.MOVE_WEST_ACTION;
+                return constants.MOVE_WEST_ACTION;
             case constants.NORTHWEST_DIR:
-                return constansts.MOVE_NORTHWEST_ACTION;
+                return constants.MOVE_NORTHWEST_ACTION;
         }
     }
 
@@ -2226,7 +2367,9 @@ try {
                     let is = FindItemsOnTile(mapHead, x, y);
                     let pis = FindItemsOnTile(map, x, y);
 
-                    let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 0);
+                    // TODO: FIXME
+                    //let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 0);
+                    let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 1);
 
                     if (mapDrawLevels[t] < cs.length) {
                         DrawCreature(mapHead, xO, yO, cs[mapDrawLevels[t]], brightnessMultiplier);
