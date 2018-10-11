@@ -31,11 +31,11 @@
 // instead of doing things at home! At night!
 //
 // Come wittness the slowest autocomplete,
-// Which fails with lines most basic to complete,
+// which fails with lines most basic to complete,
 // it's so bad that it must've been a feat,
 // to make something so quickly obsolete.
 //
-// Want? Errors when accessing non-members?
+// What? Errors when accessing non-members?
 // Instead we'll put your results ina blender.
 // Ask! What does the `splice` of `undefined` do?
 // Removes the first element, who woulda knew!
@@ -204,7 +204,7 @@ var IsFunction = function isFunction( obj ) {
     return typeof obj === "function" && typeof obj.nodeType !== "number";
 };
 
-// From jQuery source code.
+// From jQuery source code.W
 let IsPlainObject = function(obj) {
     var proto, Ctor;
 
@@ -333,99 +333,86 @@ try {
     textGUI = new MultiWindowTextGUI(new SeparateTextGUIThread.Factory(), screen);
     textGUI.getGUIThread().start();
 
-            let win = new BasicWindow("SHOP");
-            win.setHints([WHint.MODAL, WHint.FIXED_POSITION]);
-            win.setPosition(new TerminalPosition(0, 0));
+    let shopWin = new BasicWindow("Shop");
+    shopWin.setHints([WHint.MODAL, WHint.FIXED_POSITION, WHint.FIXED_SIZE]);
+    let wSize = textGUI.getScreen().getTerminalSize();
+    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 21, 1));
+    shopWin.setSize(new TerminalSize(16, wSize.getRows() - 5));
+    
+    let shopPanel = new Panel(new GridLayout(3));
+
+    let sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    let uLabel = new Label("Upgrades");
+    uLabel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.CENTER, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(uLabel);
+
+    sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    var uPanel = new Panel();
+    uPanel.setLayoutManager(new LinearLayout(Direction.HORIZONTAL))
+    let defTheme = uPanel.getTheme().getDefaultDefinition().getNormal();
+    let theme = new com.googlecode.lanterna.graphics.SimpleTheme(defTheme.getBackground(), defTheme.getForeground(), []);
+    uPanel.setTheme(theme);
+    uPanel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.BEGINNING, true, true, 3, 1));
+
+    let title = new Label("This is a label that spans two columns");
+    uPanel.addComponent(title);
+
+    shopPanel.addComponent(uPanel);
+
+    sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    let pLabel = new Label("Buy");
+    pLabel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.CENTER, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(pLabel);
+
+    sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    var pPanel = new Panel();
+    pPanel.setLayoutManager(new LinearLayout(Direction.VERTICAL))
+    pPanel.setTheme(theme);
+    pPanel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.BEGINNING, true, true, 3, 1));
+    
+    title = new Label("Buy 1");
+    pPanel.addComponent(title);
+    title = new Label("Buy 2");
+    pPanel.addComponent(title);
+
+    shopPanel.addComponent(pPanel);
+
+    shopWin.setComponent(shopPanel);
+    
     textGUI.getGUIThread().invokeLater({
         "run": function () {
-            let contentPanel = new Panel(new GridLayout(2));
-            let gridLayout = contentPanel.getLayoutManager();
-            gridLayout.setHorizontalSpacing(3);
-
-            win.setComponent(contentPanel);
-            textGUI.addWindow(win);
+            textGUI.addWindow(shopWin);
         }
     });
 
-    while (false) {
+    while (true) {
         textGUI.getGUIThread().invokeLater({
             "run": function () {
-                let win = new BasicWindow("My Root Window");
-                let contentPanel = new Panel(new GridLayout(2));
-                let gridLayout = contentPanel.getLayoutManager();
-                gridLayout.setHorizontalSpacing(3);
-
-                let title = new Label("This is a label that spans two columns");
-                title.setLayoutData(GridLayout.createLayoutData(
-                    GridLayout.Alignment.BEGINNING,
-                    GridLayout.Alignment.BEGINNING,
-                    true,
-                    false,
-                    2,
-                    1
-                ));
-                contentPanel.addComponent(title);
-
-                contentPanel.addComponent(new Label("Text Box (aligned)"));
-                contentPanel.addComponent(
-                    new TextBox()
-                        .setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.BEGINNING, GridLayout.Alignment.CENTER))
-                );
-
-                contentPanel.addComponent(new Label("Password Box (aligned)"));
-                contentPanel.addComponent(
-                    new TextBox()
-                        .setMask(new Character('*'))
-                        .setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.BEGINNING, GridLayout.Alignment.CENTER))
-                );
-
-                contentPanel.addComponent(new Label("Read-only Combo Box (filled)"));
-                contentPanel.addComponent(
-                    new ComboBox(["Hello,", "Bye."])
-                        .setReadOnly(true)
-                        .setPreferredSize(new TerminalSize(20, 1))
-                        .setLayoutData(GridLayout.createHorizontallyFilledLayoutData(1))
-                );
-
-                contentPanel.addComponent(new Label("Editable Combo Box (filled)"));
-                contentPanel.addComponent(
-                    new ComboBox("Item #1", "Item #2", "Item #3", "Item #4")
-                        .setReadOnly(false)
-                        .setLayoutData(GridLayout.createHorizontallyFilledLayoutData(1))
-                );
-
-                contentPanel.addComponent(new Label("Button (centered)"));
-                contentPanel.addComponent(
-                    new Button("Button", {
-                        "run": function () {
-                            MessageDialog.showMessageDialog(textGUI, "MessageBox", "This is a message box", MessageDialogButton.OK);
-                        },
-                    })
-                        .setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.CENTER, GridLayout.Alignment.CENTER))
-                );
-
-                contentPanel.addComponent(
-                    new EmptySpace()
-                        .setLayoutData(GridLayout.createHorizontallyFilledLayoutData(2))
-                );
-                contentPanel.addComponent(
-                    new Separator(Direction.HORIZONTAL)
-                        .setLayoutData(GridLayout.createHorizontallyFilledLayoutData(2))
-                );
-                contentPanel.addComponent(
-                    new Button("Close", {
-                        "run": function () {
-                            win.close();
-                        }
-                    })
-                        .setLayoutData(GridLayout.createHorizontallyEndAlignedLayoutData(2))
-                );
-
-                win.setComponent(contentPanel);
-                textGUI.addWindow(win);
+                let nwSize = textGUI.getScreen().getTerminalSize();
+                if (
+                    nwSize.getRows() != wSize.getRows() 
+                    || nwSize.getColumns() != wSize.getColumns() 
+                ) {
+                    wSize = nwSize;
+                    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 20, 1));
+                    shopWin.setSize(new TerminalSize(16, wSize.getRows() - 4));
+                    textGUI.updateScreen();
+                }
             }
         });
-        Thread.sleep(500);
+        Thread.sleep(100);
     }
 
     /*
