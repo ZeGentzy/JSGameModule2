@@ -21,14 +21,14 @@
 // Actually, you will only get none.
 //
 // Welcome to the land of the boll weevil!
-// Where IDE's, provided, are medieval!
+// Where IDEs, provided, are medieval!
 // Tumble those dieing hands 'cross a keyboard.
 // Wait for it to un-freeze, makin' me be bored.
 //
 // Great is havin' t'wait for many minutes.
 // If only the comps haven't some rickets,
 // you might, just might, get something done, tonight.
-// instead of doing things at home! At night!
+// Instead of doing things at home! At night!
 //
 // Come wittness the slowest autocomplete,
 // which fails with lines most basic to complete,
@@ -121,16 +121,16 @@
 // Claim mastery, over the unwordly!
 //
 // Over the language which wobbles and rolls,
-// Whose weak foundation is crattered with holes,
-// Which on your sanity takes it's slow toll.
-// As you suffer from the stories told.
+// whose weak foundation is crattered with holes,
+// which on your sanity takes it's slow toll,
+// as you suffer from the stories told.
 //
 // WHAT HAPPENED TO THE ROUGELIKE?
 //
 // It was slow, to no fault of my own. Simple things, like an A* across a 64x64
 // tile map were taking 3-13 seconds. Map generation was taking 9-10 seconds
-// before optimization, and down to 1-2 after, ect, ect. The debugger multiplied 
-// the time taken by like a factor of three. Don't get me started about the 
+// before optimization, and down to 1-2 after, ect, ect. The debugger multiplied
+// the time taken by like a factor of three. Don't get me started about the
 // debugger.
 //
 // How do I know it's to no fault of my own? For the shits and giggles, I, and
@@ -144,8 +144,10 @@
 //  * Measured and written by "OrenAudeles", on IRC
 //
 //  Anyways, Dominis Temporis (the rougelike) has been replaced by
-//  Window Clicker (tm) (c) (r), an idea pitched by OrenAudeles, inspired by
-//  such ~borring~ fun games as Cookie Clicker.
+//  Window Clicker TM (C) (R), an idea pitched by "OrenAudeles", inspired by
+//  such ~borring~ fun games as Cookie Clicker. The source code for Dominis
+//  Temporis, which interestingly actually fully implements the submitted
+//  diagram dispite being incomplete, can be found in the file `myprogram2.js`.
 
 // java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
@@ -197,7 +199,6 @@ stdout.printf("This game has been tested with resolutions of 80 by 24 and higher
 
 // From jQuery source code.
 var IsFunction = function isFunction( obj ) {
-    // Support: Chrome <=57, Firefox <=52
     // In some browsers, typeof returns "function" for HTML <object> elements
     // (i.e., `typeof document.createElement( "object" ) === "function"`).
     // We don't want to classify *any* DOM node as a function.
@@ -307,6 +308,7 @@ function ASSERT(condition, message) {
  * Constants
  */
 let constants = Object.freeze({
+    "WINDOW_WIDTH": 36,
 });
 
 /*
@@ -318,6 +320,52 @@ let thisInput;
 let textGUI;
 let screen;
 let time = 0;
+let ads = [];
+let moneyAccess = new java.util.concurrent.Semaphore(1);
+let money = 0;
+let random = new Random();
+
+let activeWindowAccess = new java.util.concurrent.Semaphore(1);
+let activeWindow;
+
+// Bad things happen if we don't put this out here.
+let objsAccess = new java.util.concurrent.Semaphore(1);
+let objs = [];
+
+let actionAccess = new java.util.concurrent.Semaphore(1);
+let action;
+let activeAction;
+let activeActionBuy;
+
+/*
+ * We need to keep track of which thread should actually be working, else the
+ * vars on the main thread might go out of scope before the GUI thread starts.
+ * This is the only explaination I can think of for the random errors I was
+ * experiencing.
+ *
+ * Cause JS.
+ *
+ * False = main thread.
+ * True = GUI thread.
+ */
+let atomicWhoseJob = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+let keyQueueAccess = new java.util.concurrent.Semaphore(1);
+let keyQueue = [];
+
+let buyables = [
+    {"upgrade": true, "owned": false, "available": true, "text": "E\nF\nG\nH", "cost": 20, "title": "Flimsy Keyboard", "effects": []},
+    {"upgrade": true, "owned": false, "available": true, "text": "A\nB\nC\nD", "cost": 50, "title": "Faster CPU", "effects": []},
+    {"upgrade": false, "owned": false, "available": true, "text": "c\nd\ne\nf", "cost": 500, "title": "Monkey", "effects": []},
+];
+
+function MarginlessGrid(i) {
+    return new GridLayout(i)
+        .setTopMarginSize(0)
+        .setBottomMarginSize(0)
+        .setRightMarginSize(0)
+        .setLeftMarginSize(0);
+}
 
 try {
     /*
@@ -333,15 +381,87 @@ try {
     textGUI = new MultiWindowTextGUI(new SeparateTextGUIThread.Factory(), screen);
     textGUI.getGUIThread().start();
 
+    textGUI.addListener({
+        "onUnhandledKeyStroke": function (tg, key) {
+            if (key != null) {
+                keyQueueAccess.acquire();
+                keyQueue[keyQueue.length] = key;
+                keyQueueAccess.release();
+            }
+
+            return false;
+        }
+    });
+
+    let pinWindow = new BasicWindow();
+    pinWindow.setVisible(false);
+    atomicWhoseJob.set(true);
+    textGUI.getGUIThread().invokeLater({
+        "run": function () {
+		    while (!atomicWhoseJob.get()) {}
+            textGUI.addWindow(pinWindow);
+            atomicWhoseJob.set(false);
+        }
+    });
+	while (atomicWhoseJob.get()) {}
+
+    let splashActive = true;
+    let splashWin = new BasicWindow("Buy");
+    splashWin.setHints([WHint.EXPANDED]);
+    let splashPanel = new Panel(MarginlessGrid(1));
+
+    let splashLabel = new Label("hiii! SPlash screen here.");
+    splashLabel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true, true, 1, 1));
+    splashPanel.addComponent(splashLabel);
+
+    let splashButton = new Button("Close", {"run": function () {splashWin.close(); splashActive = false;}});
+    splashButton.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true, false, 1, 1));
+    splashPanel.addComponent(splashButton);
+
+    splashWin.setComponent(splashPanel);
+    atomicWhoseJob.set(true);
+    textGUI.getGUIThread().invokeLater({
+        "run": function () {
+            while (!atomicWhoseJob.get()) {}
+            textGUI.addWindow(splashWin);
+            atomicWhoseJob.set(false);
+        }
+    });
+    while (atomicWhoseJob.get()) {}
+
     let shopWin = new BasicWindow("Shop");
-    shopWin.setHints([WHint.MODAL, WHint.FIXED_POSITION, WHint.FIXED_SIZE]);
+    activeWindowAccess.acquire();
+    activeWindow = shopWin;
+    activeWindowAccess.release();
+    shopWin.setHints([WHint.FIXED_POSITION, WHint.FIXED_SIZE]);
     let wSize = textGUI.getScreen().getTerminalSize();
-    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 21, 1));
-    shopWin.setSize(new TerminalSize(16, wSize.getRows() - 5));
-    
-    let shopPanel = new Panel(new GridLayout(3));
+    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 5 - constants.WINDOW_WIDTH, 1));
+    shopWin.setSize(new TerminalSize(constants.WINDOW_WIDTH, wSize.getRows() - 5));
+
+    let shopPanel = new Panel(MarginlessGrid(3));
+
+    // If we don't have a textbox at the top, things break :/
+    shopPanel.addComponent(
+        new TextBox(new TerminalSize(200, 4), "Welcome to Window Clicker TM (C) (R)\nStart by pressing tab, then wait for\nwindows to start poping up\n", TextBox.Style.MULTI_LINE)
+            .setReadOnly(true)
+            .setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER, true, false, 3, 1))
+    );
 
     let sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    moneyAccess.acquire();
+    let mLabel = new Label("Money - " + money + "W");
+    moneyAccess.release();
+    mLabel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.CENTER, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(mLabel);
+
+    sep = new Separator(Direction.HORIZONTAL);
+    sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
+    shopPanel.addComponent(sep);
+
+    sep = new Separator(Direction.HORIZONTAL);
     sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
     shopPanel.addComponent(sep);
 
@@ -353,16 +473,8 @@ try {
     sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
     shopPanel.addComponent(sep);
 
-    var uPanel = new Panel();
-    uPanel.setLayoutManager(new LinearLayout(Direction.HORIZONTAL))
-    let defTheme = uPanel.getTheme().getDefaultDefinition().getNormal();
-    let theme = new com.googlecode.lanterna.graphics.SimpleTheme(defTheme.getBackground(), defTheme.getForeground(), []);
-    uPanel.setTheme(theme);
+    var uPanel = new ActionListBox();
     uPanel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.BEGINNING, true, true, 3, 1));
-
-    let title = new Label("This is a label that spans two columns");
-    uPanel.addComponent(title);
-
     shopPanel.addComponent(uPanel);
 
     sep = new Separator(Direction.HORIZONTAL);
@@ -377,42 +489,256 @@ try {
     sep.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.CENTER));
     shopPanel.addComponent(sep);
 
-    var pPanel = new Panel();
-    pPanel.setLayoutManager(new LinearLayout(Direction.VERTICAL))
-    pPanel.setTheme(theme);
+    var pPanel = new ActionListBox();
     pPanel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.BEGINNING, true, true, 3, 1));
-    
-    title = new Label("Buy 1");
-    pPanel.addComponent(title);
-    title = new Label("Buy 2");
-    pPanel.addComponent(title);
-
     shopPanel.addComponent(pPanel);
 
     shopWin.setComponent(shopPanel);
-    
+
+    objsAccess.acquire();
+    for (let i = 0; i < buyables.length; ++i) {
+        objs[i] = {
+            "run": function () {
+                actionAccess.acquire();
+                // There is no good way to figure out which upgrade # issues
+                // the command, as JS doesn't work to well with Java async
+                // stuff. We make a guess based on what's focused.
+                if (uPanel.isFocused()) {
+                    action = {"u": true, "i": uPanel.getSelectedIndex()};
+                } else if (pPanel.isFocused()) {
+                    action = {"u": false, "i": pPanel.getSelectedIndex()};
+                }
+                actionAccess.release();
+            }
+        };
+    }
+    objsAccess.release();
+
+    activeWindowAccess.acquire();
+    activeWindow = shopWin;
+    activeWindowAccess.release();
+    atomicWhoseJob.set(true);
     textGUI.getGUIThread().invokeLater({
         "run": function () {
+		    while (!atomicWhoseJob.get()) {}
             textGUI.addWindow(shopWin);
+            textGUI.setActiveWindow(splashWin);
+            atomicWhoseJob.set(false);
         }
     });
+	while (atomicWhoseJob.get()) {}
 
+    let lastTime = java.lang.System.currentTimeMillis();
+    let lastMade = pinWindow;
     while (true) {
+        let curTime = java.lang.System.currentTimeMillis();
+        let dTime = curTime - lastTime;
+
+        let nAdWin;
+        if (dTime > 1000) {
+            nAdWin = new BasicWindow("Add");
+            let toCloseLetter = String.fromCharCode(97 + random.nextInt(26));
+            let nAdWinLabel = new Label("Hello man.\nadsggf\nsddddddddddddddddddddddddddf\n.dsdsd\nPress '" + toCloseLetter + "' to close.");
+            nAdWin.setComponent(nAdWinLabel);
+
+            ads[ads.length] = {
+                "win": nAdWin,
+                "letter": toCloseLetter
+            };
+        }
+
+        atomicWhoseJob.set(true);
         textGUI.getGUIThread().invokeLater({
             "run": function () {
+		        while (!atomicWhoseJob.get()) {}
+                if (dTime > 1000) {
+                    textGUI.setActiveWindow(lastMade);
+                    textGUI.addWindow(nAdWin);
+                    activeWindowAccess.acquire();
+                    if (splashActive) {
+                        textGUI.setActiveWindow(splashWin);
+                    } else {
+                        textGUI.setActiveWindow(activeWindow);
+                    }
+                    activeWindowAccess.release();
+                    lastMade = nAdWin;
+                    lastTime = curTime;
+                }
+
                 let nwSize = textGUI.getScreen().getTerminalSize();
                 if (
-                    nwSize.getRows() != wSize.getRows() 
-                    || nwSize.getColumns() != wSize.getColumns() 
+                    nwSize.getRows() != wSize.getRows()
+                    || nwSize.getColumns() != wSize.getColumns()
                 ) {
                     wSize = nwSize;
-                    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 20, 1));
-                    shopWin.setSize(new TerminalSize(16, wSize.getRows() - 4));
+                    shopWin.setPosition(new TerminalPosition(wSize.getColumns() - 5 - constants.WINDOW_WIDTH, 1));
+                    shopWin.setSize(new TerminalSize(constants.WINDOW_WIDTH, wSize.getRows() - 5));
                     textGUI.updateScreen();
                 }
+                atomicWhoseJob.set(false);
             }
         });
-        Thread.sleep(100);
+        keyQueueAccess.acquire();
+        let keys = keyQueue;
+        keyQueue = [];
+        keyQueueAccess.release();
+
+		while (atomicWhoseJob.get()) {}
+
+        for (let i = 0; i < keys.length; ++i) {
+            for (let j = 0; j < ads.length; ++j) {
+                if (keys[i].getCharacter() != null
+                    && ads[j].letter.charCodeAt() == keys[i].getCharacter().charValue()) {
+
+                    atomicWhoseJob.set(true);
+                    textGUI.getGUIThread().invokeLater({
+                        "run": function () {
+                            while (!atomicWhoseJob.get()) {}
+                            ads[j].win.close();
+                            atomicWhoseJob.set(false);
+                        }
+                    });
+		            while (atomicWhoseJob.get()) {}
+
+                    ads.splice(j, 1);
+
+                    if (ads.length > 0) {
+                        lastMade = ads[ads.length - 1].win;
+                    } else {
+                        lastMade = pinWindow;
+                    }
+                    moneyAccess.acquire();
+                    ++money;
+                    moneyAccess.release();
+                    break;
+                }
+            }
+        }
+
+        atomicWhoseJob.set(true);
+        textGUI.getGUIThread().invokeLater({
+            "run": function () {
+                while (!atomicWhoseJob.get()) {}
+                moneyAccess.acquire();
+                mLabel.setText("Money - " + money + "W");
+                moneyAccess.release();
+
+                let uI = uPanel.getSelectedIndex();
+                let pI = pPanel.getSelectedIndex();
+                uPanel.clearItems();
+                pPanel.clearItems();
+                objsAccess.acquire();
+                for (let i = 0; i < buyables.length; ++i) {
+                    if (buyables[i].available && !buyables[i].owned) {
+                        let panel = buyables[i].upgrade ? uPanel : pPanel;
+                        objs[i].c = panel.getItemCount();
+                        panel.addItem(buyables[i].title + " - " + buyables[i].cost + "W", objs[i]);
+                    }
+                }
+                objsAccess.release();
+                uPanel.setSelectedIndex(Math.min(uI, uPanel.getItemCount()));
+                pPanel.setSelectedIndex(Math.min(pI, pPanel.getItemCount()));
+
+                atomicWhoseJob.set(false);
+            }
+        });
+        while (atomicWhoseJob.get()) {}
+
+        actionAccess.acquire();
+        if (action != null) {
+            atomicWhoseJob.set(true);
+            textGUI.getGUIThread().invokeLater({
+                "run": function () {
+                    while (!atomicWhoseJob.get()) {}
+                    activeWindowAccess.acquire();
+                    if (activeWindow != shopWin) {
+                        activeWindow.close();
+                    }
+                    activeWindowAccess.release();
+                    atomicWhoseJob.set(false);
+                }
+            });
+            while (atomicWhoseJob.get()) {}
+
+            let winPanel = new Panel(MarginlessGrid(2));
+
+            let panel = action.u ? uPanel : pPanel;
+            let nBuyWin = new BasicWindow("Buy");
+            nBuyWin.setHints([WHint.EXPANDED]);
+
+            let i;
+            objsAccess.acquire();
+            for (i = 0; i < objs.length && (objs[i].c != action.i || buyables[i].upgrade != action.u); ++i) {};
+            objsAccess.release();
+            activeAction = action;
+            activeAction.i2 = i;
+
+            let nBuyWinLabel = new Label(buyables[i].text);
+
+            nBuyWinLabel.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true, true, 2, 1));
+            winPanel.addComponent(nBuyWinLabel);
+
+            let buttonClose = new Button("Close", {"run": function () {
+                activeWindowAccess.acquire();
+                activeWindow.close();
+                activeWindow = shopWin;
+                activeWindowAccess.release();
+            }});
+            buttonClose.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true, false, 1, 1));
+            winPanel.addComponent(buttonClose);
+            activeActionBuy = new Button("Buy", {"run": function () {
+                buyables[activeAction.i2].owned = true;
+                moneyAccess.acquire();
+                money -= buyables[activeAction.i2].cost;
+                moneyAccess.release();
+                objsAccess.acquire();
+                objs[activeAction.i2].c = null;
+                objsAccess.release();
+
+                activeWindowAccess.acquire();
+                activeWindow.close();
+                activeWindow = shopWin;
+                activeWindowAccess.release();
+            }});
+            activeActionBuy.setLayoutData(GridLayout.createLayoutData(GridLayout.Alignment.FILL, GridLayout.Alignment.FILL, true, false, 1, 1));
+            winPanel.addComponent(activeActionBuy);
+
+            nBuyWin.setComponent(winPanel);
+            activeWindowAccess.acquire();
+            activeWindow = nBuyWin;
+            activeWindowAccess.release();
+            action = null;
+
+            atomicWhoseJob.set(true);
+            textGUI.getGUIThread().invokeLater({
+                "run": function () {
+                    while (!atomicWhoseJob.get()) {}
+                    textGUI.setActiveWindow(lastMade);
+                    textGUI.addWindow(nBuyWin);
+                    atomicWhoseJob.set(false);
+                }
+            });
+            while (atomicWhoseJob.get()) {}
+        }
+        actionAccess.release();
+
+        atomicWhoseJob.set(true);
+        textGUI.getGUIThread().invokeLater({
+            "run": function () {
+                while (!atomicWhoseJob.get()) {}
+                if (activeWindow != shopWin) {
+                    if (money < buyables[activeAction.i2].cost) {
+                        activeActionBuy.setEnabled(false);
+                        activeActionBuy.setLabel("Buy (Can't afford)");
+                    } else {
+                        activeActionBuy.setEnabled(true);
+                        activeActionBuy.setLabel("Buy");
+                    }
+                }
+                atomicWhoseJob.set(false);
+            }
+        });
+        while (atomicWhoseJob.get()) {}
     }
 
     /*
