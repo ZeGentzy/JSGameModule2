@@ -30,7 +30,7 @@
 // you might, just might, get something done, tonight.
 // Instead of doing things at home! At night!
 //
-// Come wittness the slowest autocomplete,
+// Come witness the slowest autocomplete,
 // which fails with lines most basic to complete,
 // it's so bad that it must've been a feat,
 // to make something so quickly obsolete.
@@ -62,7 +62,7 @@
 //
 // Want to make a clone of a variable?
 // I'm afraid we weren't that charitable.
-// Anywho, why do what you wanna go do?
+// Any who, why do what you wanna go do?
 // Do you think we thought any of this through?
 //
 // Do you want a half decent debugger?
@@ -75,13 +75,13 @@
 // with it's UI made out of duck' 'n' glue,
 // an' a carefully chosen white-on-blue,
 //
-// emanating a wierd VBA vibe,
+// emanating a weird VBA vibe,
 // in looking like what '08 would provide.
 // If only I could say that it's aged well,
 // but instead it makes my eyes hurt and swell.
 //
 // See them hum, my most beloved orioles,
-// watch them dance, to the bright borealis,
+// watch them dance, to the bright Borealis,
 // tap a dance, jumpin' on your computer,
 // fill with rage, yet it's only October.
 //
@@ -115,39 +115,57 @@
 // as you try to guess what mistakes you've made,
 // since Rhino JS won't give any aid.
 //
-// Stand on the lines which only waxe and wane.
+// Stand on the lines which only wax and wane.
 // Wave 'round your hand, and practice the arcane.
 // Come on! Proclaim eternal victory!
 // Claim mastery, over the unwordly!
 //
 // Over the language which wobbles and rolls,
-// whose weak foundation is crattered with holes,
+// whose weak foundation is cratered with holes,
 // which on your sanity takes it's slow toll,
 // as you suffer from the stories told.
 //
 // WHAT HAPPENED TO THE ROUGELIKE?
 //
 // It was slow, to no fault of my own. Simple things, like an A* across a 64x64
-// tile map were taking 3-13 seconds. Map generation was taking 9-10 seconds
+// tile map were taking 3-13 seconds. Map generation was taking ~23-25 seconds
 // before optimization, and down to 1-2 after, ect, ect. The debugger multiplied
 // the time taken by like a factor of three. Don't get me started about the
 // debugger.
 //
 // How do I know it's to no fault of my own? For the shits and giggles, I, and
-// some people on IRC took the time to write the map gen algorithm in other
-// langs, the results are in:
+// some people on IRC took the time to write the exact same map gen algorithm
+// in other langs, the results are in:
 //  - Rhino Js with `-opt -1`: ~25 seconds
-//  - Rhino Js with `-opt 9`: ~1-2 seconds
+//  - Rhino Js with `-opt 9` + tons of optimizations: ~1-2 seconds
 //  - C (or maybe it was C++, didn't ask): ~0.01 seconds*
 //  - Rust: ~0.01 seconds
 //
 //  * Measured and written by "OrenAudeles", on IRC
 //
 //  Anyways, Dominis Temporis (the rougelike) has been replaced by
-//  Window Clicker TM (C) (R), an idea pitched by "OrenAudeles", inspired by
-//  such ~borring~ fun games as Cookie Clicker. The source code for Dominis
-//  Temporis, which interestingly actually fully implements the submitted
-//  diagram dispite being incomplete, can be found in the file `myprogram2.js`.
+//  Window Clicker TM (C) (R). The idea for Window Clicker was originally
+//  pitched by "OrenAudeles", inspired by  such ~borring~ fun games as Cookie
+//  Clicker. It was put together (minus the art) by me in roughly two classes
+//  and four nights. The schedule was tight, and so many hacks have been
+//  put in place, especially in regards to the concurrency safety.
+//
+//  For completeness sake, the source code for Dominis Temporis can be found in
+//  the file `myprogram2.js`. Despite being completely nonplayable and missing
+//  major features, like actually being able to fight, it does implement
+//  most of the parts described in the diagram submitted. Of course,
+//  the "AI Decision Game Logic" part was barely started, and the "Low Level
+//  Game Logic" never got a good portion of the features it was supposed to
+//  encapsulate, but oh well.
+//
+//  I must also thank the jQuery devs, for open sourcing jQuery, whom which I've
+//  shamelessly borrowed from their extend function, after minor modification.
+//  I don't think it's actually used *here*, as this project is pretty simple,
+//  really. However, it was extensively used in Dominis Temporis.
+//
+//  Anyways, I've written I nice poem, which I'm sure you've seen above,
+//  describing just a small selection of the issues I experienced on this
+//  project. I'm sure you derived at least one good laugh from it.
 
 // java -cp js.jar:lanterna-3.0.1.jar org.mozilla.javascript.tools.debugger.Main -f "myprogram.js" -opt 9
 
