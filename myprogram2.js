@@ -1344,1256 +1344,1248 @@ function FOV(map, x1, y1, r, dir) {
     return ret;
 }
 
-try {
-    /*
-     * Terminal Setup
-     */
-    {
-        let termFactory = new com.googlecode.lanterna.terminal.DefaultTerminalFactory();
-        term = termFactory.createTerminal();
+/*
+ * Terminal Setup
+ */
+{
+    let termFactory = new com.googlecode.lanterna.terminal.DefaultTerminalFactory();
+    term = termFactory.createTerminal();
+}
+screen = new TerminalScreen(term);
+screen.startScreen();
+screen.setCursorPosition(null);
+
+let termSize = screen.getTerminalSize();
+
+/*
+ * Main Game Functions
+ */
+
+function IsWall(tiles, t) {
+    return tiles[t].type == constants.WALL_TILE;
+}
+
+function TilesOfTypeAroundTile(tiles, x, y, x1, y1, offsets) {
+    let ret = 0;
+    for (let i = 0; i < offsets.length; ++i) {
+        let t = offsets[i].x + x1 + (offsets[i].y + y1) * x;
+        if (
+            offsets[i].x + x1 < 0 || offsets[i].y + y1 < 0
+            || offsets[i].x + x1 >= x || offsets[i].y + y1 >= y
+            || tiles[t]
+        ) {
+            ret += 1;
+        }
     }
-    screen = new TerminalScreen(term);
-    screen.startScreen();
-    screen.setCursorPosition(null);
 
-    let termSize = screen.getTerminalSize();
+    return ret;
+}
 
-    /*
-     * Main Game Functions
-     */
-
-    function IsWall(tiles, t) {
-        return tiles[t].type == constants.WALL_TILE;
+// Scanline flood fill
+function FloodFill(tiles, x, y, x1, y1) {
+    let ret = new Array(x * y);
+    for (let i = 0; i < (x * y); ++i) {
+        ret[i] = true;
     }
 
-    function TilesOfTypeAroundTile(tiles, x, y, x1, y1, offsets) {
-        let ret = 0;
-        for (let i = 0; i < offsets.length; ++i) {
-            let t = offsets[i].x + x1 + (offsets[i].y + y1) * x;
-            if (
-                offsets[i].x + x1 < 0 || offsets[i].y + y1 < 0
-                || offsets[i].x + x1 >= x || offsets[i].y + y1 >= y
-                || tiles[t]
-            ) {
-                ret += 1;
-            }
+    let stRange = {};
+    stRange.goUp = true;
+    stRange.goDown = true;
+    stRange.y = y1;
+    stRange.sx = x1;
+    stRange.ex = x1;
+
+    let ranges = [stRange];
+
+    while (ranges.length) {
+        let r = ranges.pop();
+
+        if (!ret[r.sx + r.y * x]) {
+            continue;
         }
 
-        return ret;
-    }
-
-    // Scanline flood fill
-    function FloodFill(tiles, x, y, x1, y1) {
-        let ret = new Array(x * y);
-        for (let i = 0; i < (x * y); ++i) {
-            ret[i] = true;
+        let cex = r.ex;
+        while ((cex + 1) < x && !tiles[cex + 1 + r.y * x]) {
+            ++cex;
         }
 
-        let stRange = {};
-        stRange.goUp = true;
-        stRange.goDown = true;
-        stRange.y = y1;
-        stRange.sx = x1;
-        stRange.ex = x1;
+        let csx = r.sx;
+        while ((csx - 1) >= 0 && !tiles[csx - 1 + r.y * x]) {
+            --csx;
+        }
 
-        let ranges = [stRange];
+        for (let cx = csx; cx <= cex; ++cx) {
+            ret[cx + r.y * x] = false;
+        }
 
-        while (ranges.length) {
-            let r = ranges.pop();
+        function Line(tiles, r, csx, cex, ranges, up) {
+            let yO = up ? -1 : 1;
+            let go = up ? r.goUp : r.goDown;
 
-            if (!ret[r.sx + r.y * x]) {
-                continue;
-            }
+            let shown = false;
+            let cx;
+            for (cx = csx; cx <= cex; ++cx) {
+                if (!shown && (tiles[cx + (r.y + yO) * x] || !go && cx == r.sx)) {
+                    shown = true;
 
-            let cex = r.ex;
-            while ((cex + 1) < x && !tiles[cex + 1 + r.y * x]) {
-                ++cex;
-            }
-
-            let csx = r.sx;
-            while ((csx - 1) >= 0 && !tiles[csx - 1 + r.y * x]) {
-                --csx;
-            }
-
-            for (let cx = csx; cx <= cex; ++cx) {
-                ret[cx + r.y * x] = false;
-            }
-
-            function Line(tiles, r, csx, cex, ranges, up) {
-                let yO = up ? -1 : 1;
-                let go = up ? r.goUp : r.goDown;
-
-                let shown = false;
-                let cx;
-                for (cx = csx; cx <= cex; ++cx) {
-                    if (!shown && (tiles[cx + (r.y + yO) * x] || !go && cx == r.sx)) {
-                        shown = true;
-
-                        if (cx > csx) {
-                            let stRange = {};
-                            stRange.goUp = up;
-                            stRange.goDown = !up;
-                            stRange.y = r.y + yO;
-                            stRange.sx = csx;
-                            stRange.ex = cx - 1;
-                            ranges[ranges.length] = stRange;
-                        }
-                    } else if (shown && !tiles[cx + (r.y + yO) * x] && (go || cx < r.sx || cx > r.ex)) {
-                        shown = false;
-                        csx = cx;
+                    if (cx > csx) {
+                        let stRange = {};
+                        stRange.goUp = up;
+                        stRange.goDown = !up;
+                        stRange.y = r.y + yO;
+                        stRange.sx = csx;
+                        stRange.ex = cx - 1;
+                        ranges[ranges.length] = stRange;
                     }
-                }
-
-                if (!shown) {
-                    let stRange = {};
-                    stRange.goUp = up;
-                    stRange.goDown = !up;
-                    stRange.y = r.y + yO;
-                    stRange.sx = csx;
-                    stRange.ex = cx - 1;
-                    ranges[ranges.length] = stRange;
+                } else if (shown && !tiles[cx + (r.y + yO) * x] && (go || cx < r.sx || cx > r.ex)) {
+                    shown = false;
+                    csx = cx;
                 }
             }
 
-            Line(tiles, r, csx, cex, ranges, true);
-            Line(tiles, r, csx, cex, ranges, false);
+            if (!shown) {
+                let stRange = {};
+                stRange.goUp = up;
+                stRange.goDown = !up;
+                stRange.y = r.y + yO;
+                stRange.sx = csx;
+                stRange.ex = cx - 1;
+                ranges[ranges.length] = stRange;
+            }
         }
 
-        return ret;
+        Line(tiles, r, csx, cex, ranges, true);
+        Line(tiles, r, csx, cex, ranges, false);
     }
 
-    // Thanks, http://roguebasin.roguelikedevelopment.org/index.php?title=Cellular_Automata_Method_for_Generating_Random_Cave-Like_Levels
-    function MakeTileGrid(x, y) {
-        let offsets1 = [
-            CoordPair(-1, -1), CoordPair( 0, -1), CoordPair(+1, -1),
-            CoordPair(-1,  0), CoordPair( 0,  0), CoordPair(+1,  0),
-            CoordPair(-1, +1), CoordPair( 0, +1), CoordPair(+1, +1)
-        ];
+    return ret;
+}
 
-        let offsets2 = [
-            CoordPair(-2, -2), CoordPair(-1, -2), CoordPair( 0, -2), CoordPair(+1, -2), CoordPair(+2, -2),
-            CoordPair(-2, -1),                                                          CoordPair(+2, -1),
-            CoordPair(-2,  0),                                                          CoordPair(+2,  0),
-            CoordPair(-2, +1),                                                          CoordPair(+2, +1),
-            CoordPair(-2, +2), CoordPair(-1, +2), CoordPair( 0, +2), CoordPair(+1, +2), CoordPair(+2, +2)
-        ];
+// Thanks, http://roguebasin.roguelikedevelopment.org/index.php?title=Cellular_Automata_Method_for_Generating_Random_Cave-Like_Levels
+function MakeTileGrid(x, y) {
+    let offsets1 = [
+        CoordPair(-1, -1), CoordPair( 0, -1), CoordPair(+1, -1),
+        CoordPair(-1,  0), CoordPair( 0,  0), CoordPair(+1,  0),
+        CoordPair(-1, +1), CoordPair( 0, +1), CoordPair(+1, +1)
+    ];
 
-        while (true) {
-            let tiles = new Array(x * y);
+    let offsets2 = [
+        CoordPair(-2, -2), CoordPair(-1, -2), CoordPair( 0, -2), CoordPair(+1, -2), CoordPair(+2, -2),
+        CoordPair(-2, -1),                                                          CoordPair(+2, -1),
+        CoordPair(-2,  0),                                                          CoordPair(+2,  0),
+        CoordPair(-2, +1),                                                          CoordPair(+2, +1),
+        CoordPair(-2, +2), CoordPair(-1, +2), CoordPair( 0, +2), CoordPair(+1, +2), CoordPair(+2, +2)
+    ];
+
+    while (true) {
+        let tiles = new Array(x * y);
+        for (let cy = 0; cy < y; ++cy) {
+            for (let cx = 0; cx < x; ++cx) {
+                let t = cx + cy * x;
+                let dirt = random.nextInt(100) < 40;
+                if (dirt) {
+                    tiles[t] = true;
+                } else {
+                    tiles[t] = false;
+                }
+            }
+        }
+
+        for (let i = 0; i < 7; ++i) {
+            let prvTiles = tiles;
+            tiles = new Array(x * y);
+
             for (let cy = 0; cy < y; ++cy) {
                 for (let cx = 0; cx < x; ++cx) {
                     let t = cx + cy * x;
-                    let dirt = random.nextInt(100) < 40;
-                    if (dirt) {
+                    let n1 = TilesOfTypeAroundTile(
+                        prvTiles,
+                        x, y,
+                        cx, cy,
+                        offsets1
+                    );
+                    let n2 = TilesOfTypeAroundTile(
+                        prvTiles,
+                        x, y,
+                        cx, cy,
+                        offsets2
+                    );
+
+                    if (n1 >= 5 || (n1 + n2) <= Math.min(i, 2)) {
                         tiles[t] = true;
                     } else {
                         tiles[t] = false;
                     }
                 }
             }
+        }
 
-            for (let i = 0; i < 7; ++i) {
-                let prvTiles = tiles;
-                tiles = new Array(x * y);
-
-                for (let cy = 0; cy < y; ++cy) {
-                    for (let cx = 0; cx < x; ++cx) {
-                        let t = cx + cy * x;
-                        let n1 = TilesOfTypeAroundTile(
-                            prvTiles,
-                            x, y,
-                            cx, cy,
-                            offsets1
-                        );
-                        let n2 = TilesOfTypeAroundTile(
-                            prvTiles,
-                            x, y,
-                            cx, cy,
-                            offsets2
-                        );
-
-                        if (n1 >= 5 || (n1 + n2) <= Math.min(i, 2)) {
-                            tiles[t] = true;
-                        } else {
-                            tiles[t] = false;
-                        }
-                    }
-                }
-            }
-
-            for (let i = 0; i < 4; ++i) {
-                let prvTiles = tiles;
-                tiles = new Array(x * y);
-
-                for (let cy = 0; cy < y; ++cy) {
-                    for (let cx = 0; cx < x; ++cx) {
-                        let t = cx + cy * x;
-                        let n1 = TilesOfTypeAroundTile(
-                            prvTiles,
-                            x, y,
-                            cx, cy,
-                            offsets1
-                        );
-
-                        if (n1 >= 4) {
-                            tiles[t] = true;
-                        } else {
-                            tiles[t] = false;
-                        }
-                    }
-                }
-            }
-
-            for (let i = 0; i < 1; ++i) {
-                let prvTiles = tiles;
-                tiles = new Array(x * y);
-
-                for (let cy = 0; cy < y; ++cy) {
-                    for (let cx = 0; cx < x; ++cx) {
-                        let t = cx + cy * x;
-                        let n1 = TilesOfTypeAroundTile(
-                            prvTiles,
-                            x, y,
-                            cx, cy,
-                            offsets1
-                        );
-
-                        if (n1 >= 5) {
-                            tiles[t] = true;
-                        } else {
-                            tiles[t] = false;
-                        }
-                    }
-                }
-            }
-
-            let rTile = random.nextInt(tiles.length);
-            while (tiles[rTile]) {
-                rTile = random.nextInt(tiles.length);
-            }
-
+        for (let i = 0; i < 4; ++i) {
             let prvTiles = tiles;
-            tiles = FloodFill(
-                prvTiles,
-                x, y,
-                rTile % x, Math.floor(rTile / x)
-            );
-
-            for (let cx = 0; cx < x; ++cx) {
-                let t = cx + (y - 1) * x;
-                tiles[cx] = true;
-                tiles[t] = true;
-            }
+            tiles = new Array(x * y);
 
             for (let cy = 0; cy < y; ++cy) {
-                let t = cy * x;
-                tiles[t + x - 1] = true;
-                tiles[t] = true;
-            }
+                for (let cx = 0; cx < x; ++cx) {
+                    let t = cx + cy * x;
+                    let n1 = TilesOfTypeAroundTile(
+                        prvTiles,
+                        x, y,
+                        cx, cy,
+                        offsets1
+                    );
 
-            let fc = 0;
-            for (let i = 0; i < tiles.length; ++i) {
-                if (tiles[i]) {
-                    tiles[i] = NewDirtTile();
-                } else {
-                    tiles[i] = NewFloorTile();
-                    ++fc;
+                    if (n1 >= 4) {
+                        tiles[t] = true;
+                    } else {
+                        tiles[t] = false;
+                    }
                 }
             }
+        }
 
-            for (let i = 0; i < tiles.length; ++i) {
-                if (tiles[i].type == constants.FLOOR_TILE) {
-                    tiles[i] = NewStairsTile(true);
-                    break;
+        for (let i = 0; i < 1; ++i) {
+            let prvTiles = tiles;
+            tiles = new Array(x * y);
+
+            for (let cy = 0; cy < y; ++cy) {
+                for (let cx = 0; cx < x; ++cx) {
+                    let t = cx + cy * x;
+                    let n1 = TilesOfTypeAroundTile(
+                        prvTiles,
+                        x, y,
+                        cx, cy,
+                        offsets1
+                    );
+
+                    if (n1 >= 5) {
+                        tiles[t] = true;
+                    } else {
+                        tiles[t] = false;
+                    }
                 }
             }
+        }
 
-            for (let i = tiles.length - 1; i >= 0; --i) {
-                if (tiles[i].type == constants.FLOOR_TILE) {
-                    tiles[i] = NewStairsTile(false);
-                    break;
-                }
+        let rTile = random.nextInt(tiles.length);
+        while (tiles[rTile]) {
+            rTile = random.nextInt(tiles.length);
+        }
+
+        let prvTiles = tiles;
+        tiles = FloodFill(
+            prvTiles,
+            x, y,
+            rTile % x, Math.floor(rTile / x)
+        );
+
+        for (let cx = 0; cx < x; ++cx) {
+            let t = cx + (y - 1) * x;
+            tiles[cx] = true;
+            tiles[t] = true;
+        }
+
+        for (let cy = 0; cy < y; ++cy) {
+            let t = cy * x;
+            tiles[t + x - 1] = true;
+            tiles[t] = true;
+        }
+
+        let fc = 0;
+        for (let i = 0; i < tiles.length; ++i) {
+            if (tiles[i]) {
+                tiles[i] = NewDirtTile();
+            } else {
+                tiles[i] = NewFloorTile();
+                ++fc;
             }
+        }
 
-            if (fc >= tiles.length * 0.4) {
-                return tiles;
+        for (let i = 0; i < tiles.length; ++i) {
+            if (tiles[i].type == constants.FLOOR_TILE) {
+                tiles[i] = NewStairsTile(true);
+                break;
             }
+        }
 
-            stderr.printf("Retrying map gen, fc %f, len %f\n", fc, tiles.length / 2);
+        for (let i = tiles.length - 1; i >= 0; --i) {
+            if (tiles[i].type == constants.FLOOR_TILE) {
+                tiles[i] = NewStairsTile(false);
+                break;
+            }
+        }
+
+        if (fc >= tiles.length * 0.4) {
+            return tiles;
+        }
+
+        stderr.printf("Retrying map gen, fc %f, len %f\n", fc, tiles.length / 2);
+    }
+}
+
+function NewBrainEater(x, y) {
+    return {
+        "type": constants.BRAINEATER_CREATURE,
+        "x": x,
+        "y": y,
+        "dir": constants.NORTH_DIR,
+        "hp": constants.MAX_BRAINEATER_HP,
+        "sp": constants.TURN_SP,
+        "mhp": constants.MAX_BRAINEATER_HP,
+        "waitTime": 0,
+    };
+}
+
+function HasCreature(cs, t) {
+    let x = t % constants.LEVEL_X_DIM;
+    let y = Math.floor(t / constants.LEVEL_X_DIM);
+    for (let i = 0; i < cs.length; ++i) {
+        if (x == cs[i].x && y == cs[i].y) {
+            return true;
         }
     }
 
-    function NewBrainEater(x, y) {
-        return {
-            "type": constants.BRAINEATER_CREATURE,
-            "x": x,
-            "y": y,
-            "dir": constants.NORTH_DIR,
-            "hp": constants.MAX_BRAINEATER_HP,
-            "sp": constants.TURN_SP,
-            "mhp": constants.MAX_BRAINEATER_HP,
-            "waitTime": 0,
+    return false;
+}
+
+function GetCreatures(cs, t) {
+    let ret = [];
+    let x = t % constants.LEVEL_X_DIM;
+    let y = Math.floor(t / constants.LEVEL_X_DIM);
+    for (let i = 0; i < cs.length; ++i) {
+        if (x == cs[i].x && y == cs[i].y) {
+            ret[ret.length] = i;
+        }
+    }t
+
+    return ret;
+}
+
+function SpawnCreatures(tiles) {
+    let ret = [];
+    let points = Math.floor(constants.CREATURE_POINTS * Math.pow(constants.CREATURE_POINTS_INFLATION, curLevel));
+
+    let mPoints = Math.min(
+        0,
+        constants.BRAINEATER_CREATURE_COST
+    );
+
+    while (points >= mPoints) {
+        let rTile = random.nextInt(tiles.length);
+        while (!tiles[rTile].canWalk || HasCreature(ret, rTile)) {
+            rTile = random.nextInt(tiles.length);
+        }
+
+        let c = random.nextInt(1);
+
+        if (c == 0) {
+            ret[ret.length] = NewBrainEater(
+                rTile % constants.LEVEL_X_DIM,
+                Math.floor(rTile / constants.LEVEL_X_DIM)
+            );
+            points -= constants.BRAINEATER_CREATURE_COST;
+        }
+    }
+
+    return ret;
+}
+
+function SetupLevel(down) {
+    if (curLevel == mapLevels.length) {
+        let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
+        let creatures = SpawnCreatures(tiles);
+
+        let seenTiles = new Array(tiles.length);
+        for (let i = 0; i < tiles.length; ++i) {
+            seenTiles[i] = false;
+        }
+
+        mapLevels[curLevel] = {
+            "tiles": tiles,
+            "creatures": creatures,
+            "items": [],
+            "dims": CoordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
+            "log": [],
+            "seenTiles": seenTiles
         };
     }
-    
-    function HasCreature(cs, t) {
-        let x = t % constants.LEVEL_X_DIM;
-        let y = Math.floor(t / constants.LEVEL_X_DIM);
-        for (let i = 0; i < cs.length; ++i) {
-            if (x == cs[i].x && y == cs[i].y) {
-                return true;
-            }
+
+    let u;
+    for (u = 0; u < mapLevels[curLevel].tiles.length; ++u) {
+        if (
+            !down && mapLevels[curLevel].tiles[u].type == constants.DOWN_STAIRS_TILE
+            || down && mapLevels[curLevel].tiles[u].type == constants.UP_STAIRS_TILE
+        ) {
+            break;
         }
-        
+    }
+
+    let rmCs = GetCreatures(mapLevels[curLevel].creatures, u);
+    for (let i = 0; i < rmCs.length; ++i) {
+        mapLevels[curLevel].creatures.splice(rmCs[i], 1)
+    }
+
+    if (curLevel == 0 && down) {
+        mapLevels[curLevel].creatures[mapLevels[curLevel].creatures.length] = {
+            "type": constants.CHARACTER_CREATURE,
+            "x": u % constants.LEVEL_X_DIM,
+            "y": Math.floor(u / constants.LEVEL_X_DIM),
+            "dir": constants.NORTH_DIR,
+            "hp": constants.MAX_PLAYER_HP,
+            "sp": constants.TURN_SP,
+            "mhp": constants.MAX_PLAYER_HP,
+            "waitTime": 0,
+        };
+    } else if (down) {
+        let pLoc = FindPlayerLocation(mapLevels[curLevel]);
+        let opLoc = FindPlayerLocation(mapLevels[curLevel - 1]);
+        mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel - 1].creatures[pLoc];
+        mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
+        mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
+    } else {
+        let pLoc = FindPlayerLocation(mapLevels[curLevel]);
+        let opLoc = FindPlayerLocation(mapLevels[curLevel + 1]);
+        mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel + 1].creatures[pLoc];
+        mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
+        mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
+    }
+
+    mapDrawLevels = new Array(mapLevels[curLevel].tiles.length);
+    for (let i = 0; i < mapLevels[curLevel].tiles.length; ++i) {
+        mapDrawLevels[i] = 0;
+    }
+
+    mapLevels[curLevel].log = [];
+    mapHead = mapLevels[curLevel];
+
+    if (curLevel == 0) {
+        let lf = NewLogFactory();
+        lf.SetTxt("You're sins banish you from the land above,");
+        lf.CommitToLog();
+        lf.SetTxt("Accend only with a head on a plate,");
+        lf.CommitToLog();
+        lf.SetTxt("Either yours or the monster's, held in glove,");
+        lf.CommitToLog();
+        lf.SetTxt("Lest they take into their own hands your fate.");
+        lf.CommitToLog();
+        lf.EnableSGRS([SGR.BOLD], 0);
+        lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
+        lf.DisableSGRS([SGR.UNDERLINE], "Welcome to".length + constants.GAME_NAME.length + 1);
+        lf.SetFg(TextColor.ANSI.GREEN, 0);
+        lf.SetTxt("Welcome to " + constants.GAME_NAME + "!");
+        lf.CommitToLog();
+    } else if (down) {
+        let lf = NewLogFactory();
+        lf.SetTxt("You decend closer to the great evil.");
+        lf.CommitToLog();
+    } else {
+        let lf = NewLogFactory();
+        lf.SetTxt("You flee upwards, closer to god's domain, in fear.");
+        lf.CommitToLog();
+    }
+
+    mapHead = Extend(true, {}, mapLevels[curLevel]);
+}
+
+function DrawBar(name, val, max, x, y, len, brightness) {
+    if (brightness == 0) {
+        return;
+    }
+
+    let tg = screen.newTextGraphics();
+
+    tg.putString(new TerminalPosition(x + len - name.length + 1, y), name)
+
+    let remLen = len - name.length - 1;
+    let barLen = remLen * val / max;
+    barLen = barLen < 0 ? 0 : barLen;
+    let percStat = val / max;
+
+    if (percStat <= 0) {
+        return;
+    } else if (percStat < 0.10) {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
+        tg.enableModifiers([SGR.BLINK, SGR.BOLD, SGR.REVERSE]);
+    } else if (percStat < 0.20) {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
+        tg.enableModifiers([SGR.BLINK, SGR.BOLD]);
+    } else if (percStat < 0.30) {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
+        tg.enableModifiers([SGR.BLINK]);
+    } else if (percStat < 0.40) {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
+    } else if (percStat < 0.80) {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 0), brightness));
+    } else {
+        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(0, 255, 0), brightness));
+    }
+
+    tg.drawLine(
+        new TerminalPosition(x, y),
+        new TerminalPosition(x + barLen, y),
+        "|"
+    );
+}
+
+function NextDir(dir, cw) {
+    return cw
+        ? ((dir == constants.NORTHWEST_DIR) ? constants.NORTH_DIR : dir + 1)
+        : ((dir == constants.NORTH_DIR) ? constants.NORTHWEST_DIR : dir - 1)
+}
+
+function AngleDir(a, b) {
+    return Math.max(a, b) - Math.min(a, b) > 4
+        ? 8 - Math.max(a, b) + Math.min(a, b)
+        : Math.max(a, b) - Math.min(a, b);
+}
+
+function DirToMoveCmd(dir) {
+    switch (dir) {
+        case constants.NORTH_DIR:
+            return constants.MOVE_NORTH_ACTION;
+        case constants.NORTHEAST_DIR:
+            return constants.MOVE_NORTHEAST_ACTION;
+        case constants.EAST_DIR:
+            return constants.MOVE_EAST_ACTION;
+        case constants.SOUTHEAST_DIR:
+            return constants.MOVE_SOUTHEAST_ACTION;
+        case constants.SOUTH_DIR:
+            return constants.MOVE_SOUTH_ACTION;
+        case constants.SOUTHWEST_DIR:
+            return constants.MOVE_SOUTHWEST_ACTION;
+        case constants.WEST_DIR:
+            return constants.MOVE_WEST_ACTION;
+        case constants.NORTHWEST_DIR:
+            return constants.MOVE_NORTHWEST_ACTION;
+    }
+}
+
+function DirToRotate(s, t) {
+    // FIXME: be efficient
+    return constants.ROTATE_CLOCKWISE_ACTION;
+}
+
+function GetDir(a, b) {
+    if (a.x > b.x) {
+        if (a.y > b.y) {
+            return constants.NORTHWEST_DIR;
+        } else if (a.y < b.y) {
+            return constants.SOUTHWEST_DIR;
+        } else {
+            return constants.WEST_DIR;
+        }
+    } else if (a.x < b.x) {
+        if (a.y > b.y) {
+            return constants.NORTHEAST_DIR;
+        } else if (a.y < b.y) {
+            return constants.SOUTHEAST_DIR;
+        } else {
+            return constants.EAST_DIR;
+        }
+    } else {
+        if (a.y > b.y) {
+            return constants.SOUTH_DIR;
+        } else if (a.y < b.y) {
+            return constants.NORTH_DIR;
+        }
+    }
+
+    ASSERT(false);
+}
+
+/*
+ * Precondition: |offset.x| <= 1 && |offset.y| <= 1
+ */
+function CanMoveCreature(map, offset, coords, overlap) {
+    let x = coords.x + offset.x;
+    let y = coords.y + offset.y;
+
+    let tile = x + y * map.dims.x;
+
+    if (!map.tiles[tile].canWalk) {
         return false;
     }
-    
-    function GetCreatures(cs, t) {
-        let ret = [];
-        let x = t % constants.LEVEL_X_DIM;
-        let y = Math.floor(t / constants.LEVEL_X_DIM);
-        for (let i = 0; i < cs.length; ++i) {
-            if (x == cs[i].x && y == cs[i].y) {
-                ret[ret.length] = i;
-            }
-        }t
-        
-        return ret;
+
+    // Diagonals are special.
+    if (
+        Math.abs(offset.x) == 1 && Math.abs(offset.y) == 1
+        && !(
+            CanMoveCreature(map, CoordPair(offset.x, 0), coords, false)
+            || CanMoveCreature(map, CoordPair(0, offset.y), coords, false)
+        )
+    ) {
+        return false;
     }
 
-    function SpawnCreatures(tiles) {
-        let ret = [];
-        let points = Math.floor(constants.CREATURE_POINTS * Math.pow(constants.CREATURE_POINTS_INFLATION, curLevel));
+    if (overlap) {
+        let i;
+        for (i = 0; i < map.creatures.length && (map.creatures[i].x != x || map.creatures[i].y != y); ++i) {}
+        if (i != map.creatures.length) {
+            return false;
+        }
+    }
 
-        let mPoints = Math.min(
-            0,
-            constants.BRAINEATER_CREATURE_COST
+    return true;
+}
+
+function MoveCreature(map, offset, creature) {
+    let c = map.creatures[creature];
+    let x = c.x + offset.x;
+    let y = c.y + offset.y;
+
+    if (!CanMoveCreature(map, offset, CoordPair(c.x, c.y), true)) {
+        return false;
+    }
+
+    c.x = x;
+    c.y = y;
+
+    return true;
+}
+
+function DrawDirectionWheel(x, y, dir, brightness) {
+    if (brightness == 0) {
+        return;
+    }
+
+    let tg = screen.newTextGraphics();
+    tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
+    tg.setCharacter(new TerminalPosition(x, y), 'O');
+
+    switch (dir) {
+        case constants.NORTH_DIR:
+            tg.setCharacter(new TerminalPosition(x, y - 1), Symbols.SINGLE_LINE_VERTICAL);
+            tg.setCharacter(new TerminalPosition(x, y - 2), Symbols.TRIANGLE_UP_POINTING_BLACK);
+            break;
+        case constants.NORTHEAST_DIR:
+            tg.setCharacter(new TerminalPosition(x + 1, y - 1), '/');
+            tg.setCharacter(new TerminalPosition(x + 2, y - 2), Symbols.SINGLE_LINE_TOP_RIGHT_CORNER);
+            break;
+        case constants.EAST_DIR:
+            tg.setCharacter(new TerminalPosition(x + 1, y), Symbols.SINGLE_LINE_HORIZONTAL);
+            tg.setCharacter(new TerminalPosition(x + 2, y), Symbols.TRIANGLE_RIGHT_POINTING_BLACK);
+            break;
+        case constants.SOUTHEAST_DIR:
+            tg.setCharacter(new TerminalPosition(x + 1, y + 1), '\\');
+            tg.setCharacter(new TerminalPosition(x + 2, y + 2), Symbols.SINGLE_LINE_BOTTOM_RIGHT_CORNER);
+            break;
+        case constants.SOUTH_DIR:
+            tg.setCharacter(new TerminalPosition(x, y + 1), Symbols.SINGLE_LINE_VERTICAL);
+            tg.setCharacter(new TerminalPosition(x, y + 2), Symbols.TRIANGLE_DOWN_POINTING_BLACK);
+            break;
+        case constants.SOUTHWEST_DIR:
+            tg.setCharacter(new TerminalPosition(x - 1, y + 1), '/');
+            tg.setCharacter(new TerminalPosition(x - 2, y + 2), Symbols.SINGLE_LINE_BOTTOM_LEFT_CORNER);
+            break;
+        case constants.WEST_DIR:
+            tg.setCharacter(new TerminalPosition(x - 1, y), Symbols.SINGLE_LINE_HORIZONTAL);
+            tg.setCharacter(new TerminalPosition(x - 2, y), Symbols.TRIANGLE_LEFT_POINTING_BLACK);
+            break;
+        case constants.NORTHWEST_DIR:
+            tg.setCharacter(new TerminalPosition(x - 1, y - 1), '\\');
+            tg.setCharacter(new TerminalPosition(x - 2, y - 2), Symbols.SINGLE_LINE_TOP_LEFT_CORNER);
+            break;
+    }
+}
+
+function UpdateLog() {
+    let tg = screen.newTextGraphics();
+
+    let logLines = termSize.getRows() - 13;
+    let lineLen = Math.floor((termSize.getColumns() - 1) / 3);
+
+    tg.fillRectangle(
+        new TerminalPosition(termSize.getColumns() * 2 / 3, 12),
+        new TerminalSize(lineLen, logLines),
+        ' '
+    );
+
+    let linesSoFar = 0;
+    let i;
+    for (i = mapHead.log.length - 1; i >= 0 && linesSoFar < logLines; --i) {
+        linesSoFar += Math.ceil(mapHead.log[i].txt.length / lineLen);
+    }
+
+    let partials = Math.max(0, linesSoFar - logLines) * lineLen;
+    let first = true;
+    ++i;
+
+    linesSoFar = 0;
+    for (; i < mapHead.log.length; ++i) {
+        let tg = screen.newTextGraphics();
+        let wrapedLines = Math.ceil(mapHead.log[i].txt.length / lineLen);
+        let charsSoFar = 0;
+
+        let j = 0;
+        let k = 0;
+        let l = 0;
+        for (let m = first ? partials : 0; m < mapHead.log[i].txt.length; ++m, ++charsSoFar) {
+            if (charsSoFar == lineLen) {
+                charsSoFar = 0;
+                ++linesSoFar;
+            }
+
+            for (; j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos < m; ++j) {}
+            for (; k < mapHead.log[i].fgs.length  && mapHead.log[i].fgs[k].pos < m; ++k) {}
+            for (; l < mapHead.log[i].bgs.length  && mapHead.log[i].bgs[l].pos < m; ++l) {}
+
+            if (j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos == m) {
+                for (let key in mapHead.log[i].sgrs[j].sgrs) {
+                    if (
+                        mapHead.log[i].sgrs[j].sgrs.hasOwnProperty(key)
+                        && mapHead.log[i].sgrs[j].sgrs[key]
+                    ) {
+                        tg.enableModifiers([SGR.valueOf(key)]);
+                    } else {
+                        tg.disableModifiers([SGR.valueOf(key)]);
+                    }
+                }
+            }
+            if (k < mapHead.log[i].fgs.length && mapHead.log[i].fgs[k].pos == m) {
+                tg.setForegroundColor(mapHead.log[i].fgs[k].fg);
+            }
+            if (l < mapHead.log[i].bgs.length && mapHead.log[i].bgs[l].pos == m) {
+                tg.SetBacgroundColor(mapHead.log[i].bgs[l].bg);
+            }
+
+            tg.setCharacter(
+                new TerminalPosition(
+                    termSize.getColumns() * 2 / 3 + charsSoFar,
+                    12 + linesSoFar
+                ),
+                mapHead.log[i].txt[m]
+            );
+        }
+        ++linesSoFar;
+        first = false;
+    }
+}
+
+function FindPlayerLocation(map) {
+    let pLoc;
+    for (pLoc = 0; pLoc < map.creatures.length && map.creatures[pLoc].type != constants.CHARACTER_CREATURE; ++pLoc) {}
+    return pLoc;
+}
+
+function FindCreaturesOnTile(map, x, y) {
+    let ret = [];
+    for (let i = 0; i < map.creatures.length; ++i) {
+        if (map.creatures[i].x == x && map.creatures[i].y == y) {
+            ret[ret.length] = map.creatures[i];
+        }
+    }
+    return ret;
+}
+
+function FindItemsOnTile(map, x, y) {
+    let ret = [];
+    for (let i = 0; i < map.items.length; ++i) {
+        if (map.items[i].x == x && map.items[i].y == y) {
+            ret[ret.length] = map.items[i];
+        }
+    }
+    return ret;
+}
+
+function DrawCreature(map, xO, yO, c, brightness) {
+    if (brightness == 0) {
+        return;
+    }
+
+    let tg = screen.newTextGraphics();
+    tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
+    if (c.type == constants.CHARACTER_CREATURE) {
+        tg.setCharacter(
+            new TerminalPosition(1 + xO, 1 + yO),
+            Symbols.FACE_WHITE
         );
+    } else if (c.type == constants.BRAINEATER_CREATURE) {
+        tg.setCharacter(
+            new TerminalPosition(1 + xO, 1 + yO),
+            'b'
+        );
+    }
+}
 
-        while (points >= mPoints) {
-            let rTile = random.nextInt(tiles.length);
-            while (!tiles[rTile].canWalk || HasCreature(ret, rTile)) {
-                rTile = random.nextInt(tiles.length);
-            }
-
-            let c = random.nextInt(1);
-
-            if (c == 0) {
-                ret[ret.length] = NewBrainEater(
-                    rTile % constants.LEVEL_X_DIM,
-                    Math.floor(rTile / constants.LEVEL_X_DIM)
-                );
-                points -= constants.BRAINEATER_CREATURE_COST;
-            }
-        }
-
-        return ret;
+function DrawItem(map, xO, yO, t, brightness) {
+    if (brightness == 0) {
+        return;
     }
 
-    function SetupLevel(down) {
-        if (curLevel == mapLevels.length) {
-            let tiles = MakeTileGrid(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM);
-            let creatures = SpawnCreatures(tiles);
+    let tg = screen.newTextGraphics();
+    tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
+}
 
-            let seenTiles = new Array(tiles.length);
-            for (let i = 0; i < tiles.length; ++i) {
-                seenTiles[i] = false;
+function DrawTile(map, xO, yO, x, y, brightness) {
+    if (brightness == 0) {
+        return;
+    }
+
+    let tg = screen.newTextGraphics();
+    tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
+
+    let t = x + y * map.dims.x;
+    switch (map.tiles[t].type) {
+        case constants.EMPTY_TILE:
+            break;
+        case constants.WALL_TILE:
+            let cAbove = IsWall(map.tiles, t - map.dims.x) ? 1 : 0;
+            let cBellow = IsWall(map.tiles, t + map.dims.x) ? 2 : 0;
+            let cLeft = IsWall(map.tiles, t - 1) ? 4 : 0;
+            let cRight = IsWall(map.tiles, t + 1) ? 8 : 0;
+
+            let rchar;
+            switch (cAbove + cBellow + cLeft  + cRight) {
+                case 0:
+                    rchar = Symbols.WHITE_CIRCLE;
+                    break;
+                case 1:
+                case 2:
+                case 3:
+                    rchar = Symbols.DOUBLE_LINE_VERTICAL;
+                    break;
+                case 4:
+                case 8:
+                case 12:
+                    rchar = Symbols.DOUBLE_LINE_HORIZONTAL;
+                    break;
+                case 5:
+                    rchar = Symbols.DOUBLE_LINE_BOTTOM_RIGHT_CORNER;
+                    break;
+                case 6:
+                    rchar = Symbols.DOUBLE_LINE_TOP_RIGHT_CORNER;
+                    break;
+                case 7:
+                    rchar = Symbols.DOUBLE_LINE_T_DOWN;
+                    break;
+                case 9:
+                    rchar = Symbols.DOUBLE_LINE_BOTTOM_LEFT_CORNER;
+                    break;
+                case 10:
+                    rchar = Symbols.DOUBLE_LINE_TOP_LEFT_CORNER;
+                    break;
+                case 11:
+                    rchar = Symbols.DOUBLE_LINE_T_LEFT;
+                    break;
+                case 13:
+                    rchar = Symbols.DOUBLE_LINE_T_UP;
+                    break;
+                case 14:
+                    rchar = Symbols.DOUBLE_LINE_T_DOWN;
+                    break;
+                case 15:
+                    rchar = Symbols.DOUBLE_LINE_CROSS;
+                    break;
             }
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                rchar
+            );
+            break;
+        case constants.DIRT_TILE:
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                '#'
+            );
+            break;
+        case constants.FLOOR_TILE:
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(160, 160, 160), brightness));
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                map.tiles[t].rchar
+            );
+            break;
+        case constants.UP_STAIRS_TILE:
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                "<"
+            );
+            break;
+        case constants.DOWN_STAIRS_TILE:
+            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
+            tg.setCharacter(
+                new TerminalPosition(1 + xO, 1 + yO),
+                ">"
+            );
+            break;
+    }
+}
 
-            mapLevels[curLevel] = {
-                "tiles": tiles,
-                "creatures": creatures,
-                "items": [],
-                "dims": CoordPair(constants.LEVEL_X_DIM, constants.LEVEL_Y_DIM),
-                "log": [],
-                "seenTiles": seenTiles
-            };
+function UpdateGameView() {
+    let tg = screen.newTextGraphics();
+    let length = Math.floor(termSize.getColumns() * 2 / 3 - 2);
+    let width = Math.floor(termSize.getRows() - 2);
+    tg.fillRectangle(
+        new TerminalPosition(1, 1),
+        new TerminalSize(length, width),
+        ' '
+    );
+
+    let pLoc = FindPlayerLocation(mapHead);
+    ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
+
+    let startX = Math.floor(mapHead.creatures[pLoc].x - length / 2);
+    let startY = Math.floor(mapHead.creatures[pLoc].y - width / 2);
+
+    let fov = FOV(
+        mapHead,
+        mapHead.creatures[pLoc].x,
+        mapHead.creatures[pLoc].y,
+        10,
+        mapHead.creatures[pLoc].dir
+    );
+
+    for (let i = 0; i < fov.length; ++i) {
+        if (fov[i]) {
+            mapLevels[curLevel].seenTiles[i] = true;
         }
+    }
 
-        let u;
-        for (u = 0; u < mapLevels[curLevel].tiles.length; ++u) {
+    let map = mapLevels[curLevel];
+    for (let yO = 0; yO < width; ++yO) {
+        for (let xO = 0; xO < length; ++xO) {
+            let x = startX + xO;
+            let y = startY + yO;
+            let t = x + y * mapHead.dims.x;
+
             if (
-                !down && mapLevels[curLevel].tiles[u].type == constants.DOWN_STAIRS_TILE
-                || down && mapLevels[curLevel].tiles[u].type == constants.UP_STAIRS_TILE
+                x >= 0
+                && x < mapHead.dims.x
+                && y >= 0
+                && y < mapHead.dims.y
             ) {
-                break;
+                // Draw Order:
+                // 1. Creatures
+                // 1b. Past Creatures
+                // 2. Items
+                // 2b. Past Items
+                // 3. Tiles
+                let cs = FindCreaturesOnTile(mapHead, x, y);
+                let pcs = FindCreaturesOnTile(map, x, y);
+                let is = FindItemsOnTile(mapHead, x, y);
+                let pis = FindItemsOnTile(map, x, y);
+
+                // TODO: FIXME
+                //let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 0);
+                let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 1);
+
+                if (mapDrawLevels[t] < cs.length) {
+                    DrawCreature(mapHead, xO, yO, cs[mapDrawLevels[t]], brightnessMultiplier);
+                } else if (mapDrawLevels[t] < (cs.length + pcs.length)) {
+                    DrawCreature(map, xO, yO, pcs[mapDrawLevels[t] - cs.length], brightnessMultiplier * 0.5);
+                } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length)) {
+                    DrawItem(mapHead, xO, yO, is[mapDrawLevels[t] - cs.length - psc.length], brightnessMultiplier);
+                } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length + pis.length)) {
+                    DrawItem(map, xO, yO, pis[mapDrawLevels[t] - cs.length - psc.length - is.length], brightnessMultiplier * 0.5);
+                } else {
+                    DrawTile(mapHead, xO, yO, x, y, brightnessMultiplier);
+                }
+
+                ++mapDrawLevels[t];
+
+                let flash_max =
+                    cs.length
+                    + pcs.length
+                    + is.length
+                    + pis.length
+                    - (mapHead.tiles[t].flashVisible ? 0 : 1);
+                if (mapDrawLevels[t] > Math.max(flash_max, 0)) {
+                    mapDrawLevels[t] = 0;
+                }
             }
         }
-                    
-        let rmCs = GetCreatures(mapLevels[curLevel].creatures, u);
-        for (let i = 0; i < rmCs.length; ++i) {
-            mapLevels[curLevel].creatures.splice(rmCs[i], 1)
-        }
+    }
+}
 
-        if (curLevel == 0 && down) {
-            mapLevels[curLevel].creatures[mapLevels[curLevel].creatures.length] = {
-                "type": constants.CHARACTER_CREATURE,
-                "x": u % constants.LEVEL_X_DIM,
-                "y": Math.floor(u / constants.LEVEL_X_DIM),
-                "dir": constants.NORTH_DIR,
-                "hp": constants.MAX_PLAYER_HP,
-                "sp": constants.TURN_SP,
-                "mhp": constants.MAX_PLAYER_HP,
-                "waitTime": 0,
-            };
-        } else if (down) {
-            let pLoc = FindPlayerLocation(mapLevels[curLevel]);
-            let opLoc = FindPlayerLocation(mapLevels[curLevel - 1]);
-            mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel - 1].creatures[pLoc];
-            mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
-            mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
-        } else {
-            let pLoc = FindPlayerLocation(mapLevels[curLevel]);
-            let opLoc = FindPlayerLocation(mapLevels[curLevel + 1]);
-            mapLevels[curLevel].creatures[pLoc] = mapLevels[curLevel + 1].creatures[pLoc];
-            mapLevels[curLevel].creatures[pLoc].x = u % constants.LEVEL_X_DIM;
-            mapLevels[curLevel].creatures[pLoc].y = Math.floor(u / constants.LEVEL_X_DIM);
-        }
+function DrawGame() {
+    let tg = screen.newTextGraphics();
 
-        mapDrawLevels = new Array(mapLevels[curLevel].tiles.length);
-        for (let i = 0; i < mapLevels[curLevel].tiles.length; ++i) {
+    if (gameover) {
+        tg.setForegroundColor(TextColor.ANSI.RED);
+        tg.enableModifiers([SGR.BOLD, SGR.REVERSE]);
+    }
+
+    // Top and bottom
+    tg.drawLine(
+        new TerminalPosition(1, 0),
+        new TerminalPosition(termSize.getColumns() - 2, 0),
+        Symbols.DOUBLE_LINE_HORIZONTAL
+    );
+    tg.drawLine(
+        new TerminalPosition(1, termSize.getRows() - 1),
+        new TerminalPosition(termSize.getColumns() - 2, termSize.getRows() - 1),
+        Symbols.DOUBLE_LINE_HORIZONTAL
+    );
+
+    // left, middle and right
+    tg.drawLine(
+        new TerminalPosition(0, 1),
+        new TerminalPosition(0, termSize.getRows() - 2),
+        Symbols.DOUBLE_LINE_VERTICAL
+    );
+    tg.drawLine(
+        new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 1),
+        new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, termSize.getRows() - 2),
+        Symbols.SINGLE_LINE_VERTICAL
+    );
+    tg.drawLine(
+        new TerminalPosition(termSize.getColumns() - 1, 1),
+        new TerminalPosition(termSize.getColumns() - 1, termSize.getRows() - 2),
+        Symbols.DOUBLE_LINE_VERTICAL
+    );
+
+    // Corners
+    tg.setCharacter(
+        new TerminalPosition(0, 0),
+        Symbols.DOUBLE_LINE_TOP_LEFT_CORNER
+    );
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() - 1, 0),
+        Symbols.DOUBLE_LINE_TOP_RIGHT_CORNER
+    );
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() - 1, termSize.getRows() - 1),
+        Symbols.DOUBLE_LINE_BOTTOM_RIGHT_CORNER
+    );
+    tg.setCharacter(
+        new TerminalPosition(0, termSize.getRows() - 1),
+        Symbols.DOUBLE_LINE_BOTTOM_LEFT_CORNER
+    );
+
+    // `T` intersections
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 0),
+        Symbols.DOUBLE_LINE_T_SINGLE_DOWN
+    );
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, termSize.getRows() - 1),
+        Symbols.DOUBLE_LINE_T_SINGLE_UP
+    );
+
+    // Middle bar above log
+    tg.drawLine(
+        new TerminalPosition(termSize.getColumns() / 3 * 2, 11),
+        new TerminalPosition(termSize.getColumns() - 2, 11),
+        Symbols.SINGLE_LINE_HORIZONTAL
+    );
+
+    // `T` intersections
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 11),
+        Symbols.SINGLE_LINE_T_RIGHT
+    );
+    tg.setCharacter(
+        new TerminalPosition(termSize.getColumns() - 1, 11),
+        Symbols.DOUBLE_LINE_T_SINGLE_LEFT
+    );
+
+    let map = mapLevels[curLevel];
+    let pLoc = FindPlayerLocation(map);
+    ASSERT(pLoc != map.creatures.length, "Character not found on level.");
+
+    DrawBar(
+        "HP",
+        map.creatures[pLoc].hp,
+        constants.MAX_PLAYER_HP,
+        termSize.getColumns() / 3 * 2 + 1,
+        1,
+        termSize.getColumns() / 3 - 4,
+        .5
+    );
+
+    DrawBar(
+        "SP",
+        map.creatures[pLoc].sp,
+        constants.TURN_SP,
+        termSize.getColumns() / 3 * 2 + 1,
+        2,
+        termSize.getColumns() / 3 - 4,
+        .5
+    );
+
+    DrawDirectionWheel(
+        termSize.getColumns() / 6 * 5  - 1,
+        6,
+        map.creatures[pLoc].dir,
+        .5
+    );
+
+    pLoc = FindPlayerLocation(mapHead);
+    ASSERT(pLoc != map.creatures.length, "Character not found on level.");
+
+    DrawBar(
+        "HP",
+        mapHead.creatures[pLoc].hp,
+        constants.MAX_PLAYER_HP,
+        termSize.getColumns() / 3 * 2 + 1,
+        1,
+        termSize.getColumns() / 3 - 4,
+        1
+    );
+
+    DrawBar(
+        "SP",
+        mapHead.creatures[pLoc].sp,
+        constants.TURN_SP,
+        termSize.getColumns() / 3 * 2 + 1,
+        2,
+        termSize.getColumns() / 3 - 4,
+        1
+    );
+
+    DrawDirectionWheel(
+        termSize.getColumns() / 6 * 5  - 1,
+        6,
+        mapHead.creatures[pLoc].dir,
+        1
+    );
+
+    UpdateLog();
+    UpdateGameView();
+}
+
+function PlayerIssue(pLoc) {
+    let tchar = thisInput.getCharacter();
+    if (tchar != null) {
+        switch (String.fromCharCode(tchar.charValue())) {
+            case 'u':
+                IssueCommand(pLoc, constants.MOVE_NORTHWEST_ACTION);
+                break;
+            case 'i':
+                IssueCommand(pLoc, constants.MOVE_NORTHEAST_ACTION);
+                break;
+            case 'o':
+                IssueCommand(pLoc, constants.ROTATE_CLOCKWISE_ACTION);
+                break;
+            case 'p':
+                autoCommit = !autoCommit;
+                break;
+            case 'j':
+                IssueCommand(pLoc, constants.MOVE_WEST_ACTION);
+                break;
+            case 'k':
+                IssueCommand(pLoc, constants.MOVE_SOUTH_ACTION);
+                break;
+            case 'l':
+                IssueCommand(pLoc, constants.MOVE_NORTH_ACTION);
+                break;
+            case ';':
+                IssueCommand(pLoc, constants.MOVE_EAST_ACTION);
+                break;
+            case 'n':
+                IssueCommand(pLoc, constants.ROTATE_COUNTERCLOCKWISE_ACTION);
+                break;
+            case 'm':
+                IssueCommand(pLoc, constants.MOVE_SOUTHWEST_ACTION);
+                break;
+            case ',':
+                IssueCommand(pLoc, constants.MOVE_SOUTHEAST_ACTION);
+                break;
+            case '.':
+                IssueCommand(pLoc, constants.WAIT_ACTION);
+                break;
+            case '<':
+                IssueCommand(pLoc, constants.ACCEND_UPWARDS_ACTION);
+                break;
+            case '>':
+                IssueCommand(pLoc, constants.DECCEND_DOWNARDS_ACTION);
+                break;
+        }
+    }
+}
+
+function GameLogic() {
+    if (
+        thisInput.getKeyType() == KeyType.Escape
+        || gameover && thisInput.getKeyType() == KeyType.Enter
+    ) {
+        running = false;
+        return;
+    } else if (gameover) {
+        return;
+    }
+
+    let pLoc = FindPlayerLocation(mapHead);
+    ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
+
+    let oldAC = autoCommit;
+    PlayerIssue(pLoc);
+
+    let pc = mapHead.creatures[pLoc];
+    if (thisInput.getKeyType() == KeyType.Backspace) {
+        RewindToLastChoice();
+        autoCommit = false;
+    } else if (thisInput.getKeyType() == KeyType.Enter) {
+        Commit();
+        autoCommit = false;
+    }
+
+    while (
+        thisInput.getKeyType() != KeyType.Enter
+        && autoCommit && oldAC == autoCommit
+        && (constants.TURN_SP - pc.sp) > constants.TURN_SP * constants.SP_REFILL_RATE
+    ) {
+        RewindToLastChoice();
+        Commit();
+        pLoc = FindPlayerLocation(mapHead);
+        ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
+        PlayerIssue(pLoc);
+        pc = mapHead.creatures[pLoc];
+    }
+
+    pLoc = FindPlayerLocation(mapHead);
+    ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
+
+    if (mapHead.creatures[pLoc].hp <= 0) {
+        let lf = NewLogFactory();
+        lf.EnableSGRS([SGR.BOLD, SGR.REVERSE, SGR.BLINK], 0);
+        lf.SetFg(TextColor.ANSI.RED, 0);
+        lf.SetTxt("You have succumb to weakness.");
+        lf.CommitToLog();
+        lf.SetTxt("Hit enter to exit.");
+        lf.CommitToLog();
+
+        gameover = true;
+    }
+}
+
+SetupLevel(true);
+
+/*
+ * Main Game Loop.
+ */
+while (running) {
+    let newTermSize = screen.doResizeIfNecessary();
+    if (newTermSize != null) {
+        termSize = newTermSize;
+        screen.clear();
+        screen.refresh(Screen.RefreshType.COMPLETE);
+    }
+
+    let nTime = java.lang.System.currentTimeMillis();
+    let dTime = nTime - time;
+
+    if (dTime > 1000) {
+        screen.clear();
+        DrawGame();
+        screen.refresh(Screen.RefreshType.DELTA);
+        time = java.lang.System.currentTimeMillis();
+    }
+
+    thisInput = term.pollInput();
+    if (thisInput != null) {
+        GameLogic();
+
+        for (let i = 0; i < mapDrawLevels.length; ++i) {
             mapDrawLevels[i] = 0;
         }
-
-        mapLevels[curLevel].log = [];
-        mapHead = mapLevels[curLevel];
-
-        if (curLevel == 0) {
-            let lf = NewLogFactory();
-            lf.SetTxt("You're sins banish you from the land above,");
-            lf.CommitToLog();
-            lf.SetTxt("Accend only with a head on a plate,");
-            lf.CommitToLog();
-            lf.SetTxt("Either yours or the monster's, held in glove,");
-            lf.CommitToLog();
-            lf.SetTxt("Lest they take into their own hands your fate.");
-            lf.CommitToLog();
-            lf.EnableSGRS([SGR.BOLD], 0);
-            lf.EnableSGRS([SGR.UNDERLINE], "Welcome to".length + 1);
-            lf.DisableSGRS([SGR.UNDERLINE], "Welcome to".length + constants.GAME_NAME.length + 1);
-            lf.SetFg(TextColor.ANSI.GREEN, 0);
-            lf.SetTxt("Welcome to " + constants.GAME_NAME + "!");
-            lf.CommitToLog();
-        } else if (down) {
-            let lf = NewLogFactory();
-            lf.SetTxt("You decend closer to the great evil.");
-            lf.CommitToLog();
-        } else {
-            let lf = NewLogFactory();
-            lf.SetTxt("You flee upwards, closer to god's domain, in fear.");
-            lf.CommitToLog();
-        }
-
-        mapHead = Extend(true, {}, mapLevels[curLevel]);
+        time = 0;
+    } else {
+        Thread.sleep(50);
     }
-
-    function DrawBar(name, val, max, x, y, len, brightness) {
-        if (brightness == 0) {
-            return;
-        }
-
-        let tg = screen.newTextGraphics();
-
-        tg.putString(new TerminalPosition(x + len - name.length + 1, y), name)
-
-        let remLen = len - name.length - 1;
-        let barLen = remLen * val / max;
-        barLen = barLen < 0 ? 0 : barLen;
-        let percStat = val / max;
-
-        if (percStat <= 0) {
-            return;
-        } else if (percStat < 0.10) {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
-            tg.enableModifiers([SGR.BLINK, SGR.BOLD, SGR.REVERSE]);
-        } else if (percStat < 0.20) {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
-            tg.enableModifiers([SGR.BLINK, SGR.BOLD]);
-        } else if (percStat < 0.30) {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
-            tg.enableModifiers([SGR.BLINK]);
-        } else if (percStat < 0.40) {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 0, 0), brightness));
-        } else if (percStat < 0.80) {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 0), brightness));
-        } else {
-            tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(0, 255, 0), brightness));
-        }
-
-        tg.drawLine(
-            new TerminalPosition(x, y),
-            new TerminalPosition(x + barLen, y),
-            "|"
-        );
-    }
-
-    function NextDir(dir, cw) {
-        return cw
-            ? ((dir == constants.NORTHWEST_DIR) ? constants.NORTH_DIR : dir + 1)
-            : ((dir == constants.NORTH_DIR) ? constants.NORTHWEST_DIR : dir - 1)
-    }
-
-    function AngleDir(a, b) {
-        return Math.max(a, b) - Math.min(a, b) > 4
-            ? 8 - Math.max(a, b) + Math.min(a, b)
-            : Math.max(a, b) - Math.min(a, b);
-    }
-
-    function DirToMoveCmd(dir) {
-        switch (dir) {
-            case constants.NORTH_DIR:
-                return constants.MOVE_NORTH_ACTION;
-            case constants.NORTHEAST_DIR:
-                return constants.MOVE_NORTHEAST_ACTION;
-            case constants.EAST_DIR:
-                return constants.MOVE_EAST_ACTION;
-            case constants.SOUTHEAST_DIR:
-                return constants.MOVE_SOUTHEAST_ACTION;
-            case constants.SOUTH_DIR:
-                return constants.MOVE_SOUTH_ACTION;
-            case constants.SOUTHWEST_DIR:
-                return constants.MOVE_SOUTHWEST_ACTION;
-            case constants.WEST_DIR:
-                return constants.MOVE_WEST_ACTION;
-            case constants.NORTHWEST_DIR:
-                return constants.MOVE_NORTHWEST_ACTION;
-        }
-    }
-
-    function DirToRotate(s, t) {
-        // FIXME: be efficient
-        return constants.ROTATE_CLOCKWISE_ACTION;
-    }
-
-    function GetDir(a, b) {
-        if (a.x > b.x) {
-            if (a.y > b.y) {
-                return constants.NORTHWEST_DIR;
-            } else if (a.y < b.y) {
-                return constants.SOUTHWEST_DIR;
-            } else {
-                return constants.WEST_DIR;
-            }
-        } else if (a.x < b.x) {
-            if (a.y > b.y) {
-                return constants.NORTHEAST_DIR;
-            } else if (a.y < b.y) {
-                return constants.SOUTHEAST_DIR;
-            } else {
-                return constants.EAST_DIR;
-            }
-        } else {
-            if (a.y > b.y) {
-                return constants.SOUTH_DIR;
-            } else if (a.y < b.y) {
-                return constants.NORTH_DIR;
-            }
-        }
-
-        ASSERT(false);
-    }
-
-    /*
-     * Precondition: |offset.x| <= 1 && |offset.y| <= 1
-     */
-    function CanMoveCreature(map, offset, coords, overlap) {
-        let x = coords.x + offset.x;
-        let y = coords.y + offset.y;
-
-        let tile = x + y * map.dims.x;
-
-        if (!map.tiles[tile].canWalk) {
-            return false;
-        }
-
-        // Diagonals are special.
-        if (
-            Math.abs(offset.x) == 1 && Math.abs(offset.y) == 1
-            && !(
-                CanMoveCreature(map, CoordPair(offset.x, 0), coords, false)
-                || CanMoveCreature(map, CoordPair(0, offset.y), coords, false)
-            )
-        ) {
-            return false;
-        }
-
-        if (overlap) {
-            let i;
-            for (i = 0; i < map.creatures.length && (map.creatures[i].x != x || map.creatures[i].y != y); ++i) {}
-            if (i != map.creatures.length) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    function MoveCreature(map, offset, creature) {
-        let c = map.creatures[creature];
-        let x = c.x + offset.x;
-        let y = c.y + offset.y;
-
-        if (!CanMoveCreature(map, offset, CoordPair(c.x, c.y), true)) {
-            return false;
-        }
-
-        c.x = x;
-        c.y = y;
-
-        return true;
-    }
-
-    function DrawDirectionWheel(x, y, dir, brightness) {
-        if (brightness == 0) {
-            return;
-        }
-
-        let tg = screen.newTextGraphics();
-        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
-        tg.setCharacter(new TerminalPosition(x, y), 'O');
-
-        switch (dir) {
-            case constants.NORTH_DIR:
-                tg.setCharacter(new TerminalPosition(x, y - 1), Symbols.SINGLE_LINE_VERTICAL);
-                tg.setCharacter(new TerminalPosition(x, y - 2), Symbols.TRIANGLE_UP_POINTING_BLACK);
-                break;
-            case constants.NORTHEAST_DIR:
-                tg.setCharacter(new TerminalPosition(x + 1, y - 1), '/');
-                tg.setCharacter(new TerminalPosition(x + 2, y - 2), Symbols.SINGLE_LINE_TOP_RIGHT_CORNER);
-                break;
-            case constants.EAST_DIR:
-                tg.setCharacter(new TerminalPosition(x + 1, y), Symbols.SINGLE_LINE_HORIZONTAL);
-                tg.setCharacter(new TerminalPosition(x + 2, y), Symbols.TRIANGLE_RIGHT_POINTING_BLACK);
-                break;
-            case constants.SOUTHEAST_DIR:
-                tg.setCharacter(new TerminalPosition(x + 1, y + 1), '\\');
-                tg.setCharacter(new TerminalPosition(x + 2, y + 2), Symbols.SINGLE_LINE_BOTTOM_RIGHT_CORNER);
-                break;
-            case constants.SOUTH_DIR:
-                tg.setCharacter(new TerminalPosition(x, y + 1), Symbols.SINGLE_LINE_VERTICAL);
-                tg.setCharacter(new TerminalPosition(x, y + 2), Symbols.TRIANGLE_DOWN_POINTING_BLACK);
-                break;
-            case constants.SOUTHWEST_DIR:
-                tg.setCharacter(new TerminalPosition(x - 1, y + 1), '/');
-                tg.setCharacter(new TerminalPosition(x - 2, y + 2), Symbols.SINGLE_LINE_BOTTOM_LEFT_CORNER);
-                break;
-            case constants.WEST_DIR:
-                tg.setCharacter(new TerminalPosition(x - 1, y), Symbols.SINGLE_LINE_HORIZONTAL);
-                tg.setCharacter(new TerminalPosition(x - 2, y), Symbols.TRIANGLE_LEFT_POINTING_BLACK);
-                break;
-            case constants.NORTHWEST_DIR:
-                tg.setCharacter(new TerminalPosition(x - 1, y - 1), '\\');
-                tg.setCharacter(new TerminalPosition(x - 2, y - 2), Symbols.SINGLE_LINE_TOP_LEFT_CORNER);
-                break;
-        }
-    }
-
-    function UpdateLog() {
-        let tg = screen.newTextGraphics();
-
-        let logLines = termSize.getRows() - 13;
-        let lineLen = Math.floor((termSize.getColumns() - 1) / 3);
-
-        tg.fillRectangle(
-            new TerminalPosition(termSize.getColumns() * 2 / 3, 12),
-            new TerminalSize(lineLen, logLines),
-            ' '
-        );
-
-        let linesSoFar = 0;
-        let i;
-        for (i = mapHead.log.length - 1; i >= 0 && linesSoFar < logLines; --i) {
-            linesSoFar += Math.ceil(mapHead.log[i].txt.length / lineLen);
-        }
-
-        let partials = Math.max(0, linesSoFar - logLines) * lineLen;
-        let first = true;
-        ++i;
-
-        linesSoFar = 0;
-        for (; i < mapHead.log.length; ++i) {
-            let tg = screen.newTextGraphics();
-            let wrapedLines = Math.ceil(mapHead.log[i].txt.length / lineLen);
-            let charsSoFar = 0;
-
-            let j = 0;
-            let k = 0;
-            let l = 0;
-            for (let m = first ? partials : 0; m < mapHead.log[i].txt.length; ++m, ++charsSoFar) {
-                if (charsSoFar == lineLen) {
-                    charsSoFar = 0;
-                    ++linesSoFar;
-                }
-
-                for (; j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos < m; ++j) {}
-                for (; k < mapHead.log[i].fgs.length  && mapHead.log[i].fgs[k].pos < m; ++k) {}
-                for (; l < mapHead.log[i].bgs.length  && mapHead.log[i].bgs[l].pos < m; ++l) {}
-
-                if (j < mapHead.log[i].sgrs.length && mapHead.log[i].sgrs[j].pos == m) {
-                    for (let key in mapHead.log[i].sgrs[j].sgrs) {
-                        if (
-                            mapHead.log[i].sgrs[j].sgrs.hasOwnProperty(key)
-                            && mapHead.log[i].sgrs[j].sgrs[key]
-                        ) {
-                            tg.enableModifiers([SGR.valueOf(key)]);
-                        } else {
-                            tg.disableModifiers([SGR.valueOf(key)]);
-                        }
-                    }
-                }
-                if (k < mapHead.log[i].fgs.length && mapHead.log[i].fgs[k].pos == m) {
-                    tg.setForegroundColor(mapHead.log[i].fgs[k].fg);
-                }
-                if (l < mapHead.log[i].bgs.length && mapHead.log[i].bgs[l].pos == m) {
-                    tg.SetBacgroundColor(mapHead.log[i].bgs[l].bg);
-                }
-
-                tg.setCharacter(
-                    new TerminalPosition(
-                        termSize.getColumns() * 2 / 3 + charsSoFar,
-                        12 + linesSoFar
-                    ),
-                    mapHead.log[i].txt[m]
-                );
-            }
-            ++linesSoFar;
-            first = false;
-        }
-    }
-
-    function FindPlayerLocation(map) {
-        let pLoc;
-        for (pLoc = 0; pLoc < map.creatures.length && map.creatures[pLoc].type != constants.CHARACTER_CREATURE; ++pLoc) {}
-        return pLoc;
-    }
-
-    function FindCreaturesOnTile(map, x, y) {
-        let ret = [];
-        for (let i = 0; i < map.creatures.length; ++i) {
-            if (map.creatures[i].x == x && map.creatures[i].y == y) {
-                ret[ret.length] = map.creatures[i];
-            }
-        }
-        return ret;
-    }
-
-    function FindItemsOnTile(map, x, y) {
-        let ret = [];
-        for (let i = 0; i < map.items.length; ++i) {
-            if (map.items[i].x == x && map.items[i].y == y) {
-                ret[ret.length] = map.items[i];
-            }
-        }
-        return ret;
-    }
-
-    function DrawCreature(map, xO, yO, c, brightness) {
-        if (brightness == 0) {
-            return;
-        }
-
-        let tg = screen.newTextGraphics();
-        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
-        if (c.type == constants.CHARACTER_CREATURE) {
-            tg.setCharacter(
-                new TerminalPosition(1 + xO, 1 + yO),
-                Symbols.FACE_WHITE
-            );
-        } else if (c.type == constants.BRAINEATER_CREATURE) {
-            tg.setCharacter(
-                new TerminalPosition(1 + xO, 1 + yO),
-                'b'
-            );
-        }
-    }
-
-    function DrawItem(map, xO, yO, t, brightness) {
-        if (brightness == 0) {
-            return;
-        }
-
-        let tg = screen.newTextGraphics();
-        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
-    }
-
-    function DrawTile(map, xO, yO, x, y, brightness) {
-        if (brightness == 0) {
-            return;
-        }
-
-        let tg = screen.newTextGraphics();
-        tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 255, 255), brightness));
-
-        let t = x + y * map.dims.x;
-        switch (map.tiles[t].type) {
-            case constants.EMPTY_TILE:
-                break;
-            case constants.WALL_TILE:
-                let cAbove = IsWall(map.tiles, t - map.dims.x) ? 1 : 0;
-                let cBellow = IsWall(map.tiles, t + map.dims.x) ? 2 : 0;
-                let cLeft = IsWall(map.tiles, t - 1) ? 4 : 0;
-                let cRight = IsWall(map.tiles, t + 1) ? 8 : 0;
-
-                let rchar;
-                switch (cAbove + cBellow + cLeft  + cRight) {
-                    case 0:
-                        rchar = Symbols.WHITE_CIRCLE;
-                        break;
-                    case 1:
-                    case 2:
-                    case 3:
-                        rchar = Symbols.DOUBLE_LINE_VERTICAL;
-                        break;
-                    case 4:
-                    case 8:
-                    case 12:
-                        rchar = Symbols.DOUBLE_LINE_HORIZONTAL;
-                        break;
-                    case 5:
-                        rchar = Symbols.DOUBLE_LINE_BOTTOM_RIGHT_CORNER;
-                        break;
-                    case 6:
-                        rchar = Symbols.DOUBLE_LINE_TOP_RIGHT_CORNER;
-                        break;
-                    case 7:
-                        rchar = Symbols.DOUBLE_LINE_T_DOWN;
-                        break;
-                    case 9:
-                        rchar = Symbols.DOUBLE_LINE_BOTTOM_LEFT_CORNER;
-                        break;
-                    case 10:
-                        rchar = Symbols.DOUBLE_LINE_TOP_LEFT_CORNER;
-                        break;
-                    case 11:
-                        rchar = Symbols.DOUBLE_LINE_T_LEFT;
-                        break;
-                    case 13:
-                        rchar = Symbols.DOUBLE_LINE_T_UP;
-                        break;
-                    case 14:
-                        rchar = Symbols.DOUBLE_LINE_T_DOWN;
-                        break;
-                    case 15:
-                        rchar = Symbols.DOUBLE_LINE_CROSS;
-                        break;
-                }
-                tg.setCharacter(
-                    new TerminalPosition(1 + xO, 1 + yO),
-                    rchar
-                );
-                break;
-            case constants.DIRT_TILE:
-                tg.setCharacter(
-                    new TerminalPosition(1 + xO, 1 + yO),
-                    '#'
-                );
-                break;
-            case constants.FLOOR_TILE:
-                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(160, 160, 160), brightness));
-                tg.setCharacter(
-                    new TerminalPosition(1 + xO, 1 + yO),
-                    map.tiles[t].rchar
-                );
-                break;
-            case constants.UP_STAIRS_TILE:
-                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
-                tg.setCharacter(
-                    new TerminalPosition(1 + xO, 1 + yO),
-                    "<"
-                );
-                break;
-            case constants.DOWN_STAIRS_TILE:
-                tg.setForegroundColor(ColourRatioToBG(TextColor.Indexed.fromRGB(255, 160, 160), brightness));
-                tg.setCharacter(
-                    new TerminalPosition(1 + xO, 1 + yO),
-                    ">"
-                );
-                break;
-        }
-    }
-
-    function UpdateGameView() {
-        let tg = screen.newTextGraphics();
-        let length = Math.floor(termSize.getColumns() * 2 / 3 - 2);
-        let width = Math.floor(termSize.getRows() - 2);
-        tg.fillRectangle(
-            new TerminalPosition(1, 1),
-            new TerminalSize(length, width),
-            ' '
-        );
-
-        let pLoc = FindPlayerLocation(mapHead);
-        ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
-
-        let startX = Math.floor(mapHead.creatures[pLoc].x - length / 2);
-        let startY = Math.floor(mapHead.creatures[pLoc].y - width / 2);
-
-        let fov = FOV(
-            mapHead,
-            mapHead.creatures[pLoc].x,
-            mapHead.creatures[pLoc].y,
-            10,
-            mapHead.creatures[pLoc].dir
-        );
-
-        for (let i = 0; i < fov.length; ++i) {
-            if (fov[i]) {
-                mapLevels[curLevel].seenTiles[i] = true;
-            }
-        }
-
-        let map = mapLevels[curLevel];
-        for (let yO = 0; yO < width; ++yO) {
-            for (let xO = 0; xO < length; ++xO) {
-                let x = startX + xO;
-                let y = startY + yO;
-                let t = x + y * mapHead.dims.x;
-
-                if (
-                    x >= 0
-                    && x < mapHead.dims.x
-                    && y >= 0
-                    && y < mapHead.dims.y
-                ) {
-                    // Draw Order:
-                    // 1. Creatures
-                    // 1b. Past Creatures
-                    // 2. Items
-                    // 2b. Past Items
-                    // 3. Tiles
-                    let cs = FindCreaturesOnTile(mapHead, x, y);
-                    let pcs = FindCreaturesOnTile(map, x, y);
-                    let is = FindItemsOnTile(mapHead, x, y);
-                    let pis = FindItemsOnTile(map, x, y);
-
-                    // TODO: FIXME
-                    //let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 0);
-                    let brightnessMultiplier = fov[t] ? 1 : (mapLevels[curLevel].seenTiles[t] ? 0.5 : 1);
-
-                    if (mapDrawLevels[t] < cs.length) {
-                        DrawCreature(mapHead, xO, yO, cs[mapDrawLevels[t]], brightnessMultiplier);
-                    } else if (mapDrawLevels[t] < (cs.length + pcs.length)) {
-                        DrawCreature(map, xO, yO, pcs[mapDrawLevels[t] - cs.length], brightnessMultiplier * 0.5);
-                    } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length)) {
-                        DrawItem(mapHead, xO, yO, is[mapDrawLevels[t] - cs.length - psc.length], brightnessMultiplier);
-                    } else if (mapDrawLevels[t] < (cs.length + pcs.length + is.length + pis.length)) {
-                        DrawItem(map, xO, yO, pis[mapDrawLevels[t] - cs.length - psc.length - is.length], brightnessMultiplier * 0.5);
-                    } else {
-                        DrawTile(mapHead, xO, yO, x, y, brightnessMultiplier);
-                    }
-
-                    ++mapDrawLevels[t];
-
-                    let flash_max =
-                        cs.length
-                        + pcs.length
-                        + is.length
-                        + pis.length
-                        - (mapHead.tiles[t].flashVisible ? 0 : 1);
-                    if (mapDrawLevels[t] > Math.max(flash_max, 0)) {
-                        mapDrawLevels[t] = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    function DrawGame() {
-        let tg = screen.newTextGraphics();
-
-        if (gameover) {
-            tg.setForegroundColor(TextColor.ANSI.RED);
-            tg.enableModifiers([SGR.BOLD, SGR.REVERSE]);
-        }
-
-        // Top and bottom
-        tg.drawLine(
-            new TerminalPosition(1, 0),
-            new TerminalPosition(termSize.getColumns() - 2, 0),
-            Symbols.DOUBLE_LINE_HORIZONTAL
-        );
-        tg.drawLine(
-            new TerminalPosition(1, termSize.getRows() - 1),
-            new TerminalPosition(termSize.getColumns() - 2, termSize.getRows() - 1),
-            Symbols.DOUBLE_LINE_HORIZONTAL
-        );
-
-        // left, middle and right
-        tg.drawLine(
-            new TerminalPosition(0, 1),
-            new TerminalPosition(0, termSize.getRows() - 2),
-            Symbols.DOUBLE_LINE_VERTICAL
-        );
-        tg.drawLine(
-            new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 1),
-            new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, termSize.getRows() - 2),
-            Symbols.SINGLE_LINE_VERTICAL
-        );
-        tg.drawLine(
-            new TerminalPosition(termSize.getColumns() - 1, 1),
-            new TerminalPosition(termSize.getColumns() - 1, termSize.getRows() - 2),
-            Symbols.DOUBLE_LINE_VERTICAL
-        );
-
-        // Corners
-        tg.setCharacter(
-            new TerminalPosition(0, 0),
-            Symbols.DOUBLE_LINE_TOP_LEFT_CORNER
-        );
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() - 1, 0),
-            Symbols.DOUBLE_LINE_TOP_RIGHT_CORNER
-        );
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() - 1, termSize.getRows() - 1),
-            Symbols.DOUBLE_LINE_BOTTOM_RIGHT_CORNER
-        );
-        tg.setCharacter(
-            new TerminalPosition(0, termSize.getRows() - 1),
-            Symbols.DOUBLE_LINE_BOTTOM_LEFT_CORNER
-        );
-
-        // `T` intersections
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 0),
-            Symbols.DOUBLE_LINE_T_SINGLE_DOWN
-        );
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, termSize.getRows() - 1),
-            Symbols.DOUBLE_LINE_T_SINGLE_UP
-        );
-
-        // Middle bar above log
-        tg.drawLine(
-            new TerminalPosition(termSize.getColumns() / 3 * 2, 11),
-            new TerminalPosition(termSize.getColumns() - 2, 11),
-            Symbols.SINGLE_LINE_HORIZONTAL
-        );
-
-        // `T` intersections
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() / 3 * 2 - 1, 11),
-            Symbols.SINGLE_LINE_T_RIGHT
-        );
-        tg.setCharacter(
-            new TerminalPosition(termSize.getColumns() - 1, 11),
-            Symbols.DOUBLE_LINE_T_SINGLE_LEFT
-        );
-
-        let map = mapLevels[curLevel];
-        let pLoc = FindPlayerLocation(map);
-        ASSERT(pLoc != map.creatures.length, "Character not found on level.");
-
-        DrawBar(
-            "HP",
-            map.creatures[pLoc].hp,
-            constants.MAX_PLAYER_HP,
-            termSize.getColumns() / 3 * 2 + 1,
-            1,
-            termSize.getColumns() / 3 - 4,
-            .5
-        );
-
-        DrawBar(
-            "SP",
-            map.creatures[pLoc].sp,
-            constants.TURN_SP,
-            termSize.getColumns() / 3 * 2 + 1,
-            2,
-            termSize.getColumns() / 3 - 4,
-            .5
-        );
-
-        DrawDirectionWheel(
-            termSize.getColumns() / 6 * 5  - 1,
-            6,
-            map.creatures[pLoc].dir,
-            .5
-        );
-
-        pLoc = FindPlayerLocation(mapHead);
-        ASSERT(pLoc != map.creatures.length, "Character not found on level.");
-
-        DrawBar(
-            "HP",
-            mapHead.creatures[pLoc].hp,
-            constants.MAX_PLAYER_HP,
-            termSize.getColumns() / 3 * 2 + 1,
-            1,
-            termSize.getColumns() / 3 - 4,
-            1
-        );
-
-        DrawBar(
-            "SP",
-            mapHead.creatures[pLoc].sp,
-            constants.TURN_SP,
-            termSize.getColumns() / 3 * 2 + 1,
-            2,
-            termSize.getColumns() / 3 - 4,
-            1
-        );
-
-        DrawDirectionWheel(
-            termSize.getColumns() / 6 * 5  - 1,
-            6,
-            mapHead.creatures[pLoc].dir,
-            1
-        );
-
-        UpdateLog();
-        UpdateGameView();
-    }
-
-    function PlayerIssue(pLoc) {
-        let tchar = thisInput.getCharacter();
-        if (tchar != null) {
-            switch (String.fromCharCode(tchar.charValue())) {
-                case 'u':
-                    IssueCommand(pLoc, constants.MOVE_NORTHWEST_ACTION);
-                    break;
-                case 'i':
-                    IssueCommand(pLoc, constants.MOVE_NORTHEAST_ACTION);
-                    break;
-                case 'o':
-                    IssueCommand(pLoc, constants.ROTATE_CLOCKWISE_ACTION);
-                    break;
-                case 'p':
-                    autoCommit = !autoCommit;
-                    break;
-                case 'j':
-                    IssueCommand(pLoc, constants.MOVE_WEST_ACTION);
-                    break;
-                case 'k':
-                    IssueCommand(pLoc, constants.MOVE_SOUTH_ACTION);
-                    break;
-                case 'l':
-                    IssueCommand(pLoc, constants.MOVE_NORTH_ACTION);
-                    break;
-                case ';':
-                    IssueCommand(pLoc, constants.MOVE_EAST_ACTION);
-                    break;
-                case 'n':
-                    IssueCommand(pLoc, constants.ROTATE_COUNTERCLOCKWISE_ACTION);
-                    break;
-                case 'm':
-                    IssueCommand(pLoc, constants.MOVE_SOUTHWEST_ACTION);
-                    break;
-                case ',':
-                    IssueCommand(pLoc, constants.MOVE_SOUTHEAST_ACTION);
-                    break;
-                case '.':
-                    IssueCommand(pLoc, constants.WAIT_ACTION);
-                    break;
-                case '<':
-                    IssueCommand(pLoc, constants.ACCEND_UPWARDS_ACTION);
-                    break;
-                case '>':
-                    IssueCommand(pLoc, constants.DECCEND_DOWNARDS_ACTION);
-                    break;
-            }
-        }
-    }
-
-    function GameLogic() {
-        if (
-            thisInput.getKeyType() == KeyType.Escape
-            || gameover && thisInput.getKeyType() == KeyType.Enter
-        ) {
-            running = false;
-            return;
-        } else if (gameover) {
-            return;
-        }
-
-        let pLoc = FindPlayerLocation(mapHead);
-        ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
-
-        let oldAC = autoCommit;
-        PlayerIssue(pLoc);
-
-        let pc = mapHead.creatures[pLoc];
-        if (thisInput.getKeyType() == KeyType.Backspace) {
-            RewindToLastChoice();
-            autoCommit = false;
-        } else if (thisInput.getKeyType() == KeyType.Enter) {
-            Commit();
-            autoCommit = false;
-        }
-
-        while (
-            thisInput.getKeyType() != KeyType.Enter
-            && autoCommit && oldAC == autoCommit
-            && (constants.TURN_SP - pc.sp) > constants.TURN_SP * constants.SP_REFILL_RATE
-        ) {
-            RewindToLastChoice();
-            Commit();
-            pLoc = FindPlayerLocation(mapHead);
-            ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
-            PlayerIssue(pLoc);
-            pc = mapHead.creatures[pLoc];
-        }
-
-        pLoc = FindPlayerLocation(mapHead);
-        ASSERT(pLoc != mapHead.creatures.length, "Character not found on level.");
-
-        if (mapHead.creatures[pLoc].hp <= 0) {
-            let lf = NewLogFactory();
-            lf.EnableSGRS([SGR.BOLD, SGR.REVERSE, SGR.BLINK], 0);
-            lf.SetFg(TextColor.ANSI.RED, 0);
-            lf.SetTxt("You have succumb to weakness.");
-            lf.CommitToLog();
-            lf.SetTxt("Hit enter to exit.");
-            lf.CommitToLog();
-
-            gameover = true;
-        }
-    }
-
-    SetupLevel(true);
-
-    /*
-     * Main Game Loop.
-     */
-    while (running) {
-        let newTermSize = screen.doResizeIfNecessary();
-        if (newTermSize != null) {
-            termSize = newTermSize;
-            screen.clear();
-            screen.refresh(Screen.RefreshType.COMPLETE);
-        }
-
-        let nTime = java.lang.System.currentTimeMillis();
-        let dTime = nTime - time;
-
-        if (dTime > 1000) {
-            screen.clear();
-            DrawGame();
-            screen.refresh(Screen.RefreshType.DELTA);
-            time = java.lang.System.currentTimeMillis();
-        }
-
-        thisInput = term.pollInput();
-        if (thisInput != null) {
-            GameLogic();
-
-            for (let i = 0; i < mapDrawLevels.length; ++i) {
-                mapDrawLevels[i] = 0;
-            }
-            time = 0;
-        } else {
-            Thread.sleep(50);
-        }
-    }
-
-    /*
-     * Cleanup
-     */
-    screen.stopScreen();
-
-} catch (err) {
-    screen.stopScreen();
-    Thread.sleep(200);
-    stdout.printf("\nFATAL ERROR: %s\n", err.toString());
-    stdout.flush();
 }
+
+/*
+ * Cleanup
+ */
+screen.stopScreen();
